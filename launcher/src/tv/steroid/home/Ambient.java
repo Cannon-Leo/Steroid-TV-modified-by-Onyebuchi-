@@ -141,7 +141,8 @@ class Ambient extends View {
         running = r;
         h.removeCallbacks(advance);
         if (r) {
-            if (photos && cur != null) h.postDelayed(advance, Math.max(1000, Prefs.interval(getContext()) * 1000L
+            if (photos && cur == null) h.post(advance);            // nothing shown yet: start now
+            else if (photos) h.postDelayed(advance, Math.max(1000, Prefs.interval(getContext()) * 1000L
                 - (System.currentTimeMillis() - curSince)));
             invalidate();
         }
@@ -180,15 +181,31 @@ class Ambient extends View {
         Collections.sort(sorted);
         Collections.sort(l);
         if (l.equals(sorted) && want == wanted) return;
+        boolean wasWanted = wanted;
         wanted = want;
-        // your own photos come first in each loop so new ones show up straight away
+        // your photos woven through the rest: one of yours, then one free photo or view, and so on,
+        // so the slideshow is always a mix with yours in every stretch of it
         List<String> own = new ArrayList<>(), rest = new ArrayList<>();
         for (String s : l) (s.startsWith("asset:") || s.contains("/" + FREE + "/") ? rest : own).add(s);
         Collections.shuffle(own);
         Collections.shuffle(rest);
-        sources.clear(); sources.addAll(own); sources.addAll(rest);
+        List<String> mix = new ArrayList<>();
+        int a = 0, b = 0;
+        while (a < own.size() || b < rest.size()) {
+            if (a < own.size()) mix.add(own.get(a++));
+            if (b < rest.size()) mix.add(rest.get(b++));
+        }
+        String showing = index >= 0 && index < sources.size() ? sources.get(index) : null;
+        sources.clear(); sources.addAll(mix);
         photos = want && !sources.isEmpty();
         if (!photos) { cur = null; prev = null; Glass.frost = null; Glass.refresh(); invalidate(); return; }
+        android.util.Log.i("SteroidAmbient", sources.size() + " photos in the slideshow (" + own.size() + " yours)");
+        // new photos arriving (downloads, your folder) never restart the slideshow: it carries on from here
+        if (cur != null && wasWanted && showing != null) {
+            index = Math.max(-1, sources.indexOf(showing));
+            if (running) { h.removeCallbacks(advance); h.postDelayed(advance, Math.max(1000, Prefs.interval(getContext()) * 1000L - (System.currentTimeMillis() - curSince))); }
+            return;
+        }
         index = -1;
         advance.run();
     }
@@ -202,6 +219,11 @@ class Ambient extends View {
             Bitmap b = decode(src);
             Bitmap fr = Glass.make(b, getWidth() > 0 ? getWidth() : 1920, getHeight() > 0 ? getHeight() : 1080);
             h.post(() -> {
+                if (b == null) { // can't read this one: straight on to the next
+                    android.util.Log.w("SteroidAmbient", "skipped unreadable " + src);
+                    if (sources.size() > 1) h.postDelayed(advance, 300);
+                    return;
+                }
                 if (b != null) {
                     Glass.frost = fr;
                     Glass.refresh();

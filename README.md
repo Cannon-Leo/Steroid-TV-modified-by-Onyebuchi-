@@ -310,7 +310,8 @@ List photo names in `personal/skip-photos` to leave them out. A `profile.jpg` (o
 in that folder becomes your avatar, and `personal/name` (one line, also private) sets the greeting's name
 until you change it on the TV. A fresh install greets **User**, and the tour asks you to add your name.
 
-The slideshow also mixes in 50 free photos the TV downloads by itself: 16 picked from Unsplash's TV
+Your photos are woven through the slideshow (one of yours, then one of the others, and so on), and new
+photos join without restarting it. The slideshow also mixes in 50 free photos the TV downloads by itself: 16 picked from Unsplash's TV
 wallpaper search (no words, logos or watermarks; paid Unsplash+ photos left out) and 34 more Unsplash
 photos via Lorem Picsum, all under the Unsplash licence. Turn them off in Launcher settings, Background.
 
