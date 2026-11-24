@@ -7,6 +7,7 @@
 #   tune     faster animations, ad id off, offline photo screensaver
 #   photos <folder>   push your photos (and profile.jpg) to the stick
 #   myphotos          the same, from the private folder named in personal/photos-folder
+#   screensaver       use the Steroid photos screensaver (your photos, full colour, clock)
 #   office [approve]  check Little Office end to end and send a test notice (and approval) to the TV
 #   update   build + install + Little Office + diagnostics, in one go
 #   pip [full|close]   mini player stuck on screen? bring it back to full screen or close it
@@ -102,6 +103,8 @@ P
     tv shell rm -f "/sdcard/Android/data/tv.steroid.home/files/photos/*.jpg" "/sdcard/Android/data/tv.steroid.home/files/photos/*.png" >/dev/null 2>&1
     "$0" photos "$L" ;;
   office) shift; scripts/office-check.sh "$@" ;;  # Little Office end to end: buchi.sh office [approve]
+  screensaver)  # use the Steroid photos screensaver (your photos, full colour, small clock) instead of Backdrop
+    tv shell settings put secure screensaver_components tv.steroid.home/.PhotoDream && echo "Screensaver: Steroid photos" ;;  # Little Office end to end: buchi.sh office [approve]
   update)  # the whole fix in one go: build, install on the TV, refresh Little Office, then check the TV
     scripts/build.sh && "$0" install && little-office/install.sh && scripts/diag.sh ;;
   pip) shift; scripts/pip.sh "$@" ;;   # mini player stuck? buchi.sh pip full / pip close

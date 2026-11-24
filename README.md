@@ -241,6 +241,13 @@ Antigravity has no hooks, so Little Office watches each task's own file: while i
 `~/.codex/config.toml` (even before Codex is installed). Neither has a way for anything outside it to
 approve its actions, so TV approvals stay Claude Code only.
 
+### Screensaver
+
+**Steroid photos** plays the same slideshow (your photos woven through the free photos and views) at full
+brightness and colour, with a small clock that shifts a little every minute. Fully offline. Turn it on with
+`scripts/buchi.sh screensaver`, or Settings, Device Preferences, Screen saver. Google's Backdrop can't take
+your photos: Google decides what it shows.
+
 ### Something not reaching the TV?
 
 `scripts/buchi.sh office` checks every link (service, Claude Code hooks, paired TVs, the TV's notice service

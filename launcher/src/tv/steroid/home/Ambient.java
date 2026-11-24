@@ -22,7 +22,8 @@ import java.util.concurrent.Executors;
  */
 class Ambient extends View {
     final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-    final Paint shade = new Paint(), photoShade = new Paint(), sideShade = new Paint(), grain = new Paint();
+    final Paint shade = new Paint(), photoShade = new Paint(), sideShade = new Paint(), grain = new Paint(), dreamShade = new Paint();
+    boolean dream; // the screensaver: photos at full brightness
     final Paint img = new Paint(Paint.FILTER_BITMAP_FLAG), fadePaint = new Paint(Paint.FILTER_BITMAP_FLAG);
     int tint = 0xFFE8915A, shown = tint, second = 0xFF5B3CC4;
     float t;
@@ -275,6 +276,7 @@ class Ambient extends View {
             new int[]{0x22000000, 0x00000000, 0x99000000, 0xF2050508},
             new float[]{0f, 0.3f, 0.62f, 1f}, Shader.TileMode.CLAMP));
         // photos need more darkening behind the clock (top) and the rows (bottom)
+        dreamShade.setShader(new LinearGradient(0, h * 0.7f, 0, h, 0x00000000, 0x8C000000, Shader.TileMode.CLAMP));
         photoShade.setShader(new LinearGradient(0, 0, 0, h,
             new int[]{0xCC000000, 0x99000000, 0xD9000000, 0xF7050508},
             new float[]{0f, 0.35f, 0.6f, 1f}, Shader.TileMode.CLAMP));
@@ -293,9 +295,12 @@ class Ambient extends View {
             photo(c, cur, now - curSince, (int) (255 * fade), w, hgt);
             if (fade >= 1f && prev != null) prev = null; // free the old image
             // "Background" slider in the Control centre: how dark the photo is behind the text (45 to 100%)
-            photoShade.setAlpha(Math.round(255 * (0.45f + 0.55f * Prefs.sp(getContext()).getInt("bgDim", 100) / 100f)));
-            c.drawRect(0, 0, w, hgt, photoShade);
-            c.drawRect(0, 0, w, hgt, sideShade);
+            if (dream) c.drawRect(0, hgt * 0.7f, w, hgt, dreamShade); // screensaver: full colour, a light shade only behind the clock
+            else {
+                photoShade.setAlpha(Math.round(255 * (0.45f + 0.55f * Prefs.sp(getContext()).getInt("bgDim", 100) / 100f)));
+                c.drawRect(0, 0, w, hgt, photoShade);
+                c.drawRect(0, 0, w, hgt, sideShade);
+            }
             boolean moving = fade < 1f || Prefs.drift(getContext());
             if (running && moving) postInvalidateDelayed(83);
             return;
