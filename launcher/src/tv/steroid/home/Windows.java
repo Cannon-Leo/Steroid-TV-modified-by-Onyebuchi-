@@ -64,6 +64,7 @@ public class Windows extends Activity {
         root.addView(ambient);
         buildBrowser();
         buildViewer();
+        Selector.attach(this, root);
         setContentView(root);
         showBrowser();
     }
@@ -98,15 +99,19 @@ public class Windows extends Activity {
         for (int i = 0; i < Places.MOODS.length; i++) filterRow.addView(filterChip(i));
         col.addView(filterRow);
 
-        ScrollView scroll = new ScrollView(this);
-        scroll.setVerticalScrollBarEnabled(false);
+        // full width with its own side padding: zoomed cards in the first and last column are never clipped
+        ScrollView scroll = new Rails.Page(this, Ui.px(48));
         scroll.setClipToPadding(false);
-        scroll.setPadding(0, Ui.px(10), 0, Ui.px(40));
+        scroll.setClipChildren(false);
+        scroll.setPadding(Ui.px(52), Ui.px(14), Ui.px(52), Ui.px(40));
         grid = new GridLayout(this);
         grid.setColumnCount(4);
         grid.setClipChildren(false);
         scroll.addView(grid);
-        col.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1f));
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(-1, 0, 1f);
+        slp.leftMargin = -Ui.px(52);
+        slp.rightMargin = -Ui.px(52);
+        col.addView(scroll, slp);
         browser.addView(col, new FrameLayout.LayoutParams(-1, -1));
         root.addView(browser);
     }
@@ -214,11 +219,12 @@ public class Windows extends Activity {
         c.setLayoutParams(lp);
         c.setOnFocusChangeListener((v, f) -> {
             Ui.lift(art, f, 1.07f);
-            rd.setStroke(Ui.px(f ? 2.5f : 1), f ? 0xFFFFFFFF : 0x1FFFFFFF);
+            rd.setStroke(Ui.px(1), f ? 0x33FFFFFF : 0x1FFFFFFF);
             if (f) ambient.tint(moodHue(i));
         });
         c.setOnClickListener(v -> open(i));
         c.setTag(i);
+        Selector.visual(c, art, Ui.px(14)); // the ring follows the zooming picture, so it never cuts across it
         return c;
     }
 

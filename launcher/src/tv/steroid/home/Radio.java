@@ -34,6 +34,7 @@ public class Radio extends Activity {
         root.addView(ambient);
         buildBrowser();
         buildNowPlaying();
+        Selector.attach(this, root);
         setContentView(root);
 
         if (getIntent().getBooleanExtra("nowPlaying", false) && RadioService.station >= 0) showNow(true);
@@ -88,6 +89,7 @@ public class Radio extends Activity {
         grid.setColumnCount(3);
         grid.setClipChildren(false);
         for (int i = 0; i < Stations.count(); i++) grid.addView(tile(i));
+        grid.addView(addTile());
         scroll.addView(grid);
         LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(0, -1, 1f);
         slp.leftMargin = Ui.px(28);
@@ -134,7 +136,6 @@ public class Radio extends Activity {
         t.setLayoutParams(lp);
         t.setOnFocusChangeListener((v, f) -> {
             Ui.lift(v, f, 1.07f);
-            bg.setStroke(f ? Ui.px(2) : 0, 0xFFFFFFFF);
             if (f) ambient.tint(hue);
         });
         t.setOnClickListener(v -> {
@@ -143,6 +144,61 @@ public class Radio extends Activity {
         });
         tiles[i] = t;
         return t;
+    }
+
+    /** + Add station: a name and a stream link (MP3/AAC, http or https), saved on the TV. */
+    View addTile() {
+        FrameLayout t = new FrameLayout(this);
+        t.setFocusable(true);
+        GradientDrawable bg = Ui.round(0x14FFFFFF, 16);
+        bg.setStroke(Ui.px(1), 0x33FFFFFF);
+        t.setBackground(bg);
+        LinearLayout in = new LinearLayout(this);
+        in.setOrientation(LinearLayout.VERTICAL);
+        in.setGravity(Gravity.CENTER);
+        Icon plus = new Icon(this, Icon.PLUS);
+        in.addView(plus, new LinearLayout.LayoutParams(Ui.px(26), Ui.px(26)));
+        TextView l = Ui.text(this, Ui.sansMedium, 13, 0xE6FFFFFF);
+        l.setText("Add station");
+        l.setPadding(0, Ui.px(8), 0, 0);
+        in.addView(l);
+        t.addView(in, new FrameLayout.LayoutParams(-1, -1));
+        GridLayout.LayoutParams lp = new GridLayout.LayoutParams();
+        lp.width = Ui.px(166); lp.height = Ui.px(96);
+        lp.setMargins(Ui.px(7), Ui.px(7), Ui.px(7), Ui.px(7));
+        t.setLayoutParams(lp);
+        t.setOnFocusChangeListener((v, f) -> { Ui.lift(v, f, 1.07f); bg.setColor(f ? 0x33FFFFFF : 0x14FFFFFF); });
+        t.setOnClickListener(v -> addDialog());
+        return t;
+    }
+
+    void addDialog() {
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(Ui.px(24), Ui.px(8), Ui.px(24), 0);
+        android.widget.EditText name = new android.widget.EditText(this);
+        name.setHint("Station name");
+        name.setSingleLine(true);
+        android.widget.EditText url = new android.widget.EditText(this);
+        url.setHint("Stream link, e.g. https://ice1.somafm.com/groovesalad-128-mp3");
+        url.setSingleLine(true);
+        url.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
+        form.addView(name);
+        form.addView(url);
+        new android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle("Add a station")
+            .setView(form)
+            .setPositiveButton("Add", (d, w) -> {
+                String n = name.getText().toString().trim(), u = url.getText().toString().trim();
+                if (n.isEmpty() || !(u.startsWith("http://") || u.startsWith("https://"))) {
+                    android.widget.Toast.makeText(this, "Enter a name and a link starting with http", android.widget.Toast.LENGTH_LONG).show();
+                    return;
+                }
+                Stations.add(this, n, u);
+                recreate();
+            })
+            .setNegativeButton("Cancel", null)
+            .show();
     }
 
     // ---------- Now Playing ----------

@@ -31,6 +31,8 @@ import java.util.Random;
 public class Retro extends Activity {
     static final String[][] DECADES = {
         // short (also the site's subdomain), long, (unused), accent, blurb
+        {"60s", "1960s", "", "#E8B23A", "Variety shows, westerns and the British invasion."},
+        {"70s", "1970s", "", "#E8915A", "Disco, sitcoms and Saturday morning cartoons."},
         {"80s", "1980s", "", "#FF4FA8", "MTV, Saturday mornings and the video store."},
         {"90s", "1990s", "", "#8F6BFF", "Cartoon blocks, sitcoms and alternative rock."},
         {"00s", "2000s", "", "#3FA7FF", "Kids' TV, pop-punk and the DVD shelf."},
