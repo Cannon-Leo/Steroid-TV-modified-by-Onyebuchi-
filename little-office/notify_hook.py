@@ -42,7 +42,32 @@ def last_assistant_sentence(path):
     return ""
 
 
+def codex(arg):
+    """Codex calls its notify program with one JSON argument when a turn completes."""
+    try:
+        d = json.loads(arg)
+    except ValueError:
+        return
+    if d.get("type") != "agent-turn-complete":
+        return
+    text = re.sub(r"[`*_#>\[\]]", "", str(d.get("last-assistant-message") or "")).strip()
+    parts = [p for p in re.split(r"(?<=[.!?])\s|\n", text) if p.strip()]
+    send("Codex", "finished", (parts[0] if parts else "Finished")[:280], str(d.get("cwd") or os.getcwd()))
+
+
+def send(agent, kind, text, cwd):
+    body = json.dumps({"agent": agent, "kind": kind, "text": text[:280], "cwd": cwd[:1000]}).encode()
+    try:
+        req = urllib.request.Request("http://127.0.0.1:8765/notify", data=body, method="POST",
+                                     headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=2).read()
+    except Exception:
+        pass
+
+
 def main():
+    if len(sys.argv) > 1 and sys.argv[1].lstrip().startswith("{"):
+        return codex(sys.argv[1])
     try:
         data = json.load(sys.stdin)
     except Exception:

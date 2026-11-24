@@ -103,6 +103,7 @@ public class Home extends Activity {
 
         // notices and approvals run even when the Look out row is hidden
         if (Config.feature("littleOffice")) OfficeService.start(this);
+        Photos.changed = () -> { avatarFor = ""; loadAvatar(); ambient.reload(); }; // photos synced from the computer
         selector = Selector.attach(this, root); // one gliding focus ring above everything
         History.listener = () -> { if (resumed) { for (Shelf sh : shelves) sh.refresh(); fillIdle(); } }; // rows update as you watch
         setContentView(root);
@@ -812,12 +813,17 @@ public class Home extends Activity {
     void loadAvatar() {
         String n = Prefs.name(this);
         avatarLetter.setText(n.isEmpty() ? "" : n.substring(0, 1).toUpperCase());
-        java.io.File dir = getExternalFilesDir(Ambient.OWN);
         java.io.File pic = null;
-        java.io.File[] all = dir == null ? null : dir.listFiles();
-        if (all != null) for (java.io.File f : all) { // profile.jpg, Profile.PNG, profile.webp...
-            String fn = f.getName().toLowerCase();
-            if (fn.startsWith("profile.") && (fn.endsWith(".jpg") || fn.endsWith(".jpeg") || fn.endsWith(".png") || fn.endsWith(".webp"))) { pic = f; break; }
+        // from Little Office first (written by the TV itself), then anything pushed with adb
+        for (String d : new String[]{Ambient.SYNCED, Ambient.OWN}) {
+            java.io.File dir = getExternalFilesDir(d);
+            java.io.File[] all = dir == null ? null : dir.listFiles();
+            if (all != null) for (java.io.File f : all) { // profile.jpg, Profile.PNG, lo_profile.webp...
+                String fn = f.getName().toLowerCase();
+                if (f.canRead() && (fn.startsWith("profile.") || fn.startsWith("lo_profile."))
+                    && (fn.endsWith(".jpg") || fn.endsWith(".jpeg") || fn.endsWith(".png") || fn.endsWith(".webp"))) { pic = f; break; }
+            }
+            if (pic != null) break;
         }
         if (pic == null) { avatar.setImageDrawable(null); avatarFor = ""; return; }
         if ((pic.getPath() + pic.lastModified()).equals(avatarFor)) { avatarLetter.setText(""); return; } // already showing

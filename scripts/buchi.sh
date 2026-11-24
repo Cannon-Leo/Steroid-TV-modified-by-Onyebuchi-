@@ -73,9 +73,29 @@ case "$1" in
   myphotos)  # your own photos and profile picture, from the folder named in personal/photos-folder (never committed)
     F="$(cat personal/photos-folder 2>/dev/null)"
     [ -d "$F" ] || { echo "Put your photo folder's path in personal/photos-folder first."; exit 1; }
-    # your name for the greeting (until you set one on the TV), also private: personal/name
-    [ -f personal/name ] && tv push personal/name /sdcard/Android/data/tv.steroid.home/files/photos/name.txt >/dev/null && echo "sent your name"
-    "$0" photos "$F" ;;
+    # a private copy Little Office can serve to paired TVs (macOS keeps background services out of Downloads);
+    # photos named in personal/skip-photos (ones with words on them, say) are left out
+    L="$HOME/.little-office/photos"; mkdir -p "$L"; rm -f "$L"/*
+    SKIP="$(cat personal/skip-photos 2>/dev/null)"
+    n=0; for f in "$F"/*; do
+      b="$(basename "$f")"
+      case "$(echo "$b" | tr "A-Z" "a-z")" in *.jpg|*.jpeg|*.png|*.webp) ;; *) continue;; esac
+      echo "$SKIP" | grep -qxF "$b" && { echo "skipped $b"; continue; }
+      cp "$f" "$L/" && n=$((n+1))
+    done
+    "$PY" - "$L" "$(cat personal/name 2>/dev/null)" <<'P'
+import json, os, sys
+p = os.path.expanduser("~/.little-office/config.json")
+try: c = json.load(open(p))
+except Exception: c = {"pinned": [], "names": {}}
+c["photos_folder"], c["name"] = sys.argv[1], sys.argv[2].strip()
+json.dump(c, open(p, "w"), indent=2)
+P
+    echo "$n photos ready for the TV (it fetches them from Little Office within a minute, and every 10 minutes)"
+    # also copy them straight over adb, for a TV that isn't paired yet
+    [ -f personal/name ] && tv push personal/name /sdcard/Android/data/tv.steroid.home/files/photos/name.txt >/dev/null 2>&1
+    tv shell rm -f "/sdcard/Android/data/tv.steroid.home/files/photos/*.jpg" "/sdcard/Android/data/tv.steroid.home/files/photos/*.png" >/dev/null 2>&1
+    "$0" photos "$L" ;;
   office) shift; scripts/office-check.sh "$@" ;;  # Little Office end to end: buchi.sh office [approve]
   update)  # the whole fix in one go: build, install on the TV, refresh Little Office, then check the TV
     scripts/build.sh && "$0" install && little-office/install.sh && scripts/diag.sh ;;

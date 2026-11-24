@@ -54,12 +54,15 @@ public class OfficeService extends Service {
         h.post(tick);
         ah.removeCallbacks(approvalTick);
         ah.postDelayed(approvalTick, 3000);
+        ah.removeCallbacks(photoTick);
+        ah.postDelayed(photoTick, 8000);
         return START_STICKY;
     }
 
     final Runnable tick = new Runnable() { public void run() {
         new Thread(() -> {
             boolean ok = Office.poll(OfficeService.this);
+
             h.post(() -> { if (ok) collect(); maybeShow(); });
         }).start();
         h.postDelayed(this, POLL_MS);
@@ -222,6 +225,12 @@ public class OfficeService extends Service {
             }).start();
         }
         ah.postDelayed(this, paired ? 4000 : 20000);
+    }};
+
+    /** Your photos and profile picture from paired computers: soon after start, then every 10 minutes. */
+    final Runnable photoTick = new Runnable() { public void run() {
+        new Thread(() -> Photos.sync(OfficeService.this)).start();
+        ah.postDelayed(this, 10 * 60_000L);
     }};
 
     void onRequests(List<Approvals.Request> l) {

@@ -26,6 +26,33 @@ def command(script):
     return f'"{py}" "{os.path.join(D, script)}"'
 
 
+def codex_notify(mode):
+    """Codex: a notify program in ~/.codex/config.toml (Codex has no approval hook, so notices only).
+    Written even before Codex is installed, so it works the day you install it. An existing notify
+    line of your own is left alone."""
+    path = os.path.join(HOME, ".codex", "config.toml")
+    try:
+        text = open(path, encoding="utf-8").read()
+    except FileNotFoundError:
+        text = ""
+    ours = "notify_hook.py" in text
+    lines = [l for l in text.splitlines() if not (l.strip().startswith("notify") and "notify_hook.py" in l)]
+    if mode == "on":
+        if any(l.strip().startswith("notify") for l in lines):
+            print("Codex already has its own notify program; left it alone")
+            return
+        py = command("notify_hook.py").split('" "')[0].strip('"')
+        entry = "notify = " + json.dumps([py, os.path.join(D, "notify_hook.py")])
+        # top level keys must come before any [table] in TOML
+        first_table = next((i for i, l in enumerate(lines) if l.strip().startswith("[")), len(lines))
+        lines.insert(first_table, entry)
+    elif not ours:
+        return
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines).strip() + "\n")
+
+
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "on"
     only = sys.argv[2] if len(sys.argv) > 2 else "all"
@@ -59,8 +86,10 @@ def main():
         shutil.copy(SETTINGS, SETTINGS + ".before-little-office")
     with open(SETTINGS, "w", encoding="utf-8") as f:
         json.dump(s, f, indent=2)
-    what = {"all": "notices and TV approvals", "notify": "notices", "approve": "TV approvals"}[only]
-    print(f"Claude Code {what}: {'ON' if mode == 'on' else 'OFF'} on this computer")
+    if only in ("all", "notify"):
+        codex_notify(mode)
+    what = {"all": "notices (Claude Code, Codex) and TV approvals (Claude Code)", "notify": "notices (Claude Code, Codex)", "approve": "TV approvals (Claude Code)"}[only]
+    print(f"{what}: {'ON' if mode == 'on' else 'OFF'} on this computer")
 
 
 if __name__ == "__main__":

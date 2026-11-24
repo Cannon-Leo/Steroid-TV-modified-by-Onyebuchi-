@@ -277,6 +277,17 @@ def ag_time(s):
         return None
 
 
+def gemini_waiting(cid):
+    """True when the task's last step never finished (Antigravity marks finished steps 3, stopped ones 6 or 7)."""
+    try:
+        con = sqlite3.connect(f"file:{os.path.join(os.path.dirname(AG_DB), 'conversations', cid + '.db')}?mode=ro", uri=True, timeout=1)
+        row = con.execute("select status from steps order by idx desc limit 1").fetchone()
+        con.close()
+        return bool(row) and row[0] not in (3, 6, 7)
+    except Exception:
+        return False
+
+
 def gemini_sessions(now, names):
     if not os.path.exists(AG_DB):
         return []
@@ -293,6 +304,13 @@ def gemini_sessions(now, names):
         if depth:          # sub-agents roll up into their parent task
             continue
         at = ag_time(modified)
+        # the task's own file changes while Antigravity works (the summary updates less often)
+        live = 0
+        try:
+            live = os.path.getmtime(os.path.join(os.path.dirname(AG_DB), "conversations", cid + ".db"))
+        except OSError:
+            pass
+        at = max(at or 0, live) or None
         if at is None or now - at > RECENT:
             continue
         cwd = ""
@@ -308,6 +326,10 @@ def gemini_sessions(now, names):
             state = "needs_you"
         elif (any(k in st for k in ("RUNNING", "BUSY", "ACTIVE", "EXECUT")) or busy) and quiet < TOOL_QUIET:
             state = "working"
+        elif live and now - live < 45:
+            state = "working"      # writing steps right now
+        elif live and now - live < 20 * 60 and gemini_waiting(cid):
+            state = "needs_you"    # stopped part way through a step: waiting on you (an approval or a question)
         elif killed:
             state = "finished"
         else:
@@ -436,6 +458,27 @@ def add_notice(b):
     return 200, {"ok": True}
 
 
+PHOTO_NAME = re.compile(r"[\w .()\-]{1,80}\.(jpg|jpeg|png|webp)", re.I)
+
+
+def photo_list():
+    """The photos to offer the TV: from config photos_folder, minus photos_skip; names checked, symlinks ignored."""
+    cfg = config()
+    folder = os.path.expanduser(str(cfg.get("photos_folder") or ""))
+    skip = set(cfg.get("photos_skip") or [])
+    if not folder or not os.path.isdir(folder):
+        return []
+    out = []
+    for n in sorted(os.listdir(folder)):
+        p = os.path.join(folder, n)
+        if n in skip or not PHOTO_NAME.fullmatch(n) or os.path.islink(p) or not os.path.isfile(p):
+            continue
+        if os.path.getsize(p) > 25_000_000:
+            continue
+        out.append((n, p))
+    return out[:300]
+
+
 def watcher():
     while True:
         try:
@@ -530,6 +573,19 @@ class Handler(BaseHTTPRequestHandler):
                 guard.failed(ip)
                 return self.reply(401, {"error": "not paired"})
             return self.reply(200, {"requests": approvals.listing()})
+        if path == "/photos" or path.startswith("/photo/"):
+            # your photos and profile picture, for paired TVs only (signed requests)
+            if not approvals.verify("GET", path, self.headers, ""):
+                guard.failed(ip)
+                return self.reply(401, {"error": "not paired"})
+            files = photo_list()
+            if path == "/photos":
+                return self.reply(200, {"photos": [{"name": n, "size": os.path.getsize(p)} for n, p in files],
+                                        "name": str(config().get("name", ""))[:40]})
+            idx = path.split("/")[2]
+            if not idx.isdigit() or int(idx) >= len(files):
+                return self.reply(404, {"error": "not found"})
+            return self.send_file(files[int(idx)][1])
         if path != "/status":
             return self.reply(404, {"error": "not found"})
         self.reply(200, cached_snapshot())
@@ -592,6 +648,21 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_PUT(self): self.reply(405, {"error": "method not allowed"})
     do_DELETE = do_PATCH = do_OPTIONS = do_HEAD = do_PUT
+
+    def send_file(self, p):
+        size = os.path.getsize(p)
+        ext = p.lower().rsplit(".", 1)[-1]
+        self.send_response(200)
+        self.send_header("Content-Type", {"png": "image/png", "webp": "image/webp"}.get(ext, "image/jpeg"))
+        self.send_header("Content-Length", str(size))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        with open(p, "rb") as f:
+            while True:
+                b = f.read(65536)
+                if not b:
+                    break
+                self.wfile.write(b)
 
     def reply(self, code, obj):
         body = json.dumps(obj).encode()

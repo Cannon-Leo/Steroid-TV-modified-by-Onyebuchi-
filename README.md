@@ -229,6 +229,14 @@ The installers turn both on (`little-office/install.sh` on a Mac, `install-windo
 `little-office/hooks.py`, which works on Mac, Windows and Linux: `python3 hooks.py off` removes them,
 `hooks.py on notify` or `hooks.py on approve` turns on just one. Only the project name and one sentence are sent.
 
+### Antigravity and Codex
+
+Antigravity has no hooks, so Little Office watches each task's own file: while it changes the task is
+**working**; when it stops, a **finished** notice goes to the TV; a step left part way through means it's
+**waiting on you**. Codex sends a **finished** notice through its `notify` setting, which `hooks.py` adds to
+`~/.codex/config.toml` (even before Codex is installed). Neither has a way for anything outside it to
+approve its actions, so TV approvals stay Claude Code only.
+
 ### Something not reaching the TV?
 
 `scripts/buchi.sh office` checks every link (service, Claude Code hooks, paired TVs, the TV's notice service
@@ -291,7 +299,10 @@ Codex and Antigravity have no permission hook, so they can only notify the TV, n
 ## Your photos and profile picture
 
 Private photos stay off GitHub: put your folder's path in `personal/photos-folder` (ignored by git, like
-every image outside the app's own resources) and run `scripts/buchi.sh myphotos`. A `profile.jpg` (or .png)
+every image outside the app's own resources) and run `scripts/buchi.sh myphotos`. Little Office then serves
+them to paired TVs only (signed requests) and the TV fetches them into a folder it creates itself, within
+a minute and every 10 minutes after, so the avatar and slideshow never depend on adb file access.
+List photo names in `personal/skip-photos` to leave them out. A `profile.jpg` (or .png)
 in that folder becomes your avatar, and `personal/name` (one line, also private) sets the greeting's name
 until you change it on the TV. A fresh install greets **User**, and the tour asks you to add your name.
 

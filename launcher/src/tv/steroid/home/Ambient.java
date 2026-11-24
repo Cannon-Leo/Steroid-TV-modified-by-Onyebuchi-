@@ -30,6 +30,7 @@ class Ambient extends View {
 
     // slideshow
     static final String OWN = "photos"; // getExternalFilesDir("photos"), filled from the Mac with adb push
+    static final String SYNCED = "synced"; // your photos fetched from Little Office (see Photos)
     static final String FREE = "free";  // free to use photos the TV downloads by itself (see fetchFree)
 
     /**
@@ -62,6 +63,10 @@ class Ambient extends View {
         "photo-1430876988766-1be68caef0e4", // sleeping tiger
     };
     static volatile boolean fetching;
+
+    /** World's Windows previews with no text, badges or logos on them (checked by eye); the rest stay in Windows only. */
+    static final java.util.Set<String> CLEAN_VIEWS = new java.util.HashSet<>(java.util.Arrays.asList(
+        "1RHOWVH4aHA", "B3k4zxss5DA", "FABZhqaFq6k", "RKOWCGVdsbM", "T108Hvq_0uM", "bMEOD4-qcbs", "hFd_jOr5X9E", "rbW4-x6vJmk"));
 
     /** Every free photo: {file name, address}. */
     static java.util.List<String[]> freeList() {
@@ -147,11 +152,15 @@ class Ambient extends View {
         boolean want = Prefs.photos(getContext());
         List<String> l = new ArrayList<>();
         if (want) {
-            File dir = getContext().getExternalFilesDir(OWN);
-            File[] fs = dir == null ? null : dir.listFiles();
-            if (fs != null) for (File f : fs) {
+            List<File> fs = new ArrayList<>();
+            for (String d : new String[]{SYNCED, OWN}) {
+                File dir = getContext().getExternalFilesDir(d);
+                File[] in = dir == null ? null : dir.listFiles();
+                if (in != null) for (File f : in) if (f.canRead()) fs.add(f); // skip files the TV isn't allowed to read
+            }
+            for (File f : fs) {
                 String n = f.getName().toLowerCase();
-                if (n.startsWith("profile.")) continue;
+                if (n.startsWith("profile.") || n.startsWith("lo_profile.") || n.endsWith(".part")) continue; // the avatar, not a background
                 if (n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".png") || n.endsWith(".webp")) l.add(f.getAbsolutePath());
             }
             // free landscape photos (Unsplash licence, via Lorem Picsum), fetched once in the background
@@ -163,7 +172,8 @@ class Ambient extends View {
             }
             try {
                 String[] a = getContext().getAssets().list("windows");
-                if (a != null) for (String s : a) if (s.endsWith(".jpg")) l.add("asset:windows/" + s);
+                // only the views with nothing written on them: most YouTube previews carry "4K", titles or slogans
+                if (a != null) for (String s : a) if (s.endsWith(".jpg") && CLEAN_VIEWS.contains(s.replace(".jpg", ""))) l.add("asset:windows/" + s);
             } catch (Exception ignored) {}
         }
         List<String> sorted = new ArrayList<>(sources);
@@ -214,7 +224,9 @@ class Ambient extends View {
             while (o.outWidth / (o.inSampleSize * 2) >= 1280) o.inSampleSize *= 2;
             o.inJustDecodeBounds = false;
             o.inPreferredConfig = Bitmap.Config.RGB_565;
-            return open(src, o);
+            Bitmap b = open(src, o);
+            if (b == null || src.startsWith("asset:")) return b;
+            return Photos.upright(src, b);
         } catch (Throwable e) { return null; }
     }
 
