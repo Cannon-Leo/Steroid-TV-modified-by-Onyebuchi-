@@ -10,7 +10,21 @@ import java.util.List;
 final class Prefs {
     static SharedPreferences sp(Context c) { return c.getSharedPreferences("personal", Context.MODE_PRIVATE); }
 
-    static String name(Context c) { return sp(c).getString("name", "Onyebuchi"); }
+    static final String DEFAULT_NAME = "User";
+    /** Your name for the greeting. Until you set one: name.txt pushed with your photos, else "User". */
+    static String name(Context c) {
+        String n = sp(c).getString("name", null);
+        if (n != null) return n;
+        try {
+            java.io.File f = new java.io.File(c.getExternalFilesDir(Ambient.OWN), "name.txt");
+            if (f.exists() && f.length() < 200) {
+                String t = new String(java.nio.file.Files.readAllBytes(f.toPath()), "UTF-8").trim();
+                if (!t.isEmpty() && t.length() <= 40) return t;
+            }
+        } catch (Exception ignored) {}
+        return DEFAULT_NAME;
+    }
+    static boolean defaultName(Context c) { return DEFAULT_NAME.equals(name(c)); }
     static void name(Context c, String n) { sp(c).edit().putString("name", n.trim()).apply(); }
 
     /** Header options (Settings, Home screen header). */

@@ -229,6 +229,13 @@ The installers turn both on (`little-office/install.sh` on a Mac, `install-windo
 `little-office/hooks.py`, which works on Mac, Windows and Linux: `python3 hooks.py off` removes them,
 `hooks.py on notify` or `hooks.py on approve` turns on just one. Only the project name and one sentence are sent.
 
+### Something not reaching the TV?
+
+`scripts/buchi.sh office` checks every link (service, Claude Code hooks, paired TVs, the TV's notice service
+and permission), sends a test notice and shows what the TV logged. `buchi.sh office approve` also sends a
+harmless test approval request. Notices and approvals come from **Claude Code running on the computer**;
+sessions in the Claude app or on the web run in the cloud and can't reach your home network.
+
 ### Keep YouTube playing
 
 Press Home while YouTube or YouTube Music plays: the same track carries on from the same second in the
@@ -285,8 +292,12 @@ Codex and Antigravity have no permission hook, so they can only notify the TV, n
 
 Private photos stay off GitHub: put your folder's path in `personal/photos-folder` (ignored by git, like
 every image outside the app's own resources) and run `scripts/buchi.sh myphotos`. A `profile.jpg` (or .png)
-in that folder becomes your avatar. The slideshow also mixes in 34 free landscape photos the TV downloads
-by itself (Unsplash licence, via Lorem Picsum); turn them off in Launcher settings, Background.
+in that folder becomes your avatar, and `personal/name` (one line, also private) sets the greeting's name
+until you change it on the TV. A fresh install greets **User**, and the tour asks you to add your name.
+
+The slideshow also mixes in 50 free photos the TV downloads by itself: 16 picked from Unsplash's TV
+wallpaper search (no words, logos or watermarks; paid Unsplash+ photos left out) and 34 more Unsplash
+photos via Lorem Picsum, all under the Unsplash licence. Turn them off in Launcher settings, Background.
 
 Put your photos (jpg, png or webp) in one folder, plus a square photo named **`profile.jpg`** for the
 picture next to the greeting, then:

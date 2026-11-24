@@ -7,6 +7,7 @@
 #   tune     faster animations, ad id off, offline photo screensaver
 #   photos <folder>   push your photos (and profile.jpg) to the stick
 #   myphotos          the same, from the private folder named in personal/photos-folder
+#   office [approve]  check Little Office end to end and send a test notice (and approval) to the TV
 #   update   build + install + Little Office + diagnostics, in one go
 #   pip [full|close]   mini player stuck on screen? bring it back to full screen or close it
 #   undo     put everything back
@@ -66,11 +67,16 @@ case "$1" in
     for f in "$2"/*; do
       case "$(echo "$f" | tr "A-Z" "a-z")" in *.jpg|*.jpeg|*.png|*.webp) tv push "$f" "$D/" >/dev/null && echo "sent $(basename "$f")";; esac
     done
-    tv shell input keyevent KEYCODE_HOME; echo "Photos are in the slideshow." ;;
+    # restart the launcher so the avatar, name and slideshow pick the new files up at once
+    tv shell am force-stop tv.steroid.home; sleep 1; tv shell input keyevent KEYCODE_HOME
+    echo "Photos are in the slideshow (a profile.jpg or .png is your avatar)." ;;
   myphotos)  # your own photos and profile picture, from the folder named in personal/photos-folder (never committed)
     F="$(cat personal/photos-folder 2>/dev/null)"
     [ -d "$F" ] || { echo "Put your photo folder's path in personal/photos-folder first."; exit 1; }
+    # your name for the greeting (until you set one on the TV), also private: personal/name
+    [ -f personal/name ] && tv push personal/name /sdcard/Android/data/tv.steroid.home/files/photos/name.txt >/dev/null && echo "sent your name"
     "$0" photos "$F" ;;
+  office) shift; scripts/office-check.sh "$@" ;;  # Little Office end to end: buchi.sh office [approve]
   update)  # the whole fix in one go: build, install on the TV, refresh Little Office, then check the TV
     scripts/build.sh && "$0" install && little-office/install.sh && scripts/diag.sh ;;
   pip) shift; scripts/pip.sh "$@" ;;   # mini player stuck? buchi.sh pip full / pip close

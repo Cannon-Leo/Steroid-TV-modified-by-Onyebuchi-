@@ -86,7 +86,7 @@ public class Personal extends Activity {
         // ---- Background
         LinearLayout bgGroup = group("Background");
         switchRow(bgGroup, Icon.IMAGE, "Photo slideshow", "Your photos and the World's Windows views behind the home screen", "photos");
-        switchRow(bgGroup, Icon.IMAGE, "Free landscape photos", "34 free to use photos (Unsplash licence) mixed in with yours", "freePhotos");
+        switchRow(bgGroup, Icon.IMAGE, "Free landscape photos", "50 free to use photos (Unsplash licence) mixed in with yours", "freePhotos");
         switchRow(bgGroup, Icon.ZOOM, "Slow zoom", "Turn off for the lightest setting", "drift");
         LinearLayout ivRow = row(bgGroup, Icon.TIMER, "Change photo every", "How long each photo stays");
         TextView iv = pillButton(ivRow, Prefs.interval(this) + " s");

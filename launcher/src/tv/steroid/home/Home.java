@@ -101,6 +101,8 @@ public class Home extends Activity {
         tlp.topMargin = Ui.px(GAP);
         col.addView(tourCard(), tlp);
 
+        // notices and approvals run even when the Look out row is hidden
+        if (Config.feature("littleOffice")) OfficeService.start(this);
         selector = Selector.attach(this, root); // one gliding focus ring above everything
         History.listener = () -> { if (resumed) { for (Shelf sh : shelves) sh.refresh(); fillIdle(); } }; // rows update as you watch
         setContentView(root);
@@ -812,19 +814,35 @@ public class Home extends Activity {
         avatarLetter.setText(n.isEmpty() ? "" : n.substring(0, 1).toUpperCase());
         java.io.File dir = getExternalFilesDir(Ambient.OWN);
         java.io.File pic = null;
-        if (dir != null) for (String ext : new String[]{"jpg", "jpeg", "png", "webp"}) {
-            java.io.File f = new java.io.File(dir, "profile." + ext);
-            if (f.exists()) { pic = f; break; }
+        java.io.File[] all = dir == null ? null : dir.listFiles();
+        if (all != null) for (java.io.File f : all) { // profile.jpg, Profile.PNG, profile.webp...
+            String fn = f.getName().toLowerCase();
+            if (fn.startsWith("profile.") && (fn.endsWith(".jpg") || fn.endsWith(".jpeg") || fn.endsWith(".png") || fn.endsWith(".webp"))) { pic = f; break; }
         }
-        if (pic == null) { avatar.setImageDrawable(null); return; }
+        if (pic == null) { avatar.setImageDrawable(null); avatarFor = ""; return; }
+        if ((pic.getPath() + pic.lastModified()).equals(avatarFor)) { avatarLetter.setText(""); return; } // already showing
         BitmapFactory.Options o = new BitmapFactory.Options();
         o.inJustDecodeBounds = true;
         BitmapFactory.decodeFile(pic.getPath(), o);
         o.inSampleSize = 1;
         while (o.outWidth / (o.inSampleSize * 2) >= 160) o.inSampleSize *= 2;
         o.inJustDecodeBounds = false;
-        avatar.setImageBitmap(BitmapFactory.decodeFile(pic.getPath(), o));
+        android.graphics.Bitmap bm = BitmapFactory.decodeFile(pic.getPath(), o);
+        if (bm == null) { android.util.Log.w("SteroidHome", "avatar: can't read " + pic); avatar.setImageDrawable(null); return; }
+        try { // phone photos are often stored sideways with a rotation tag
+            int rot = new android.media.ExifInterface(pic.getPath()).getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION, 1);
+            int deg = rot == 6 ? 90 : rot == 3 ? 180 : rot == 8 ? 270 : 0;
+            if (deg != 0) {
+                android.graphics.Matrix m = new android.graphics.Matrix();
+                m.postRotate(deg);
+                bm = android.graphics.Bitmap.createBitmap(bm, 0, 0, bm.getWidth(), bm.getHeight(), m, true);
+            }
+        } catch (Exception ignored) {}
+        avatar.setImageBitmap(bm);
+        avatarLetter.setText("");
+        avatarFor = pic.getPath() + pic.lastModified();
     }
+    String avatarFor = "";
 
     /** A round icon button for the top bar; tries each intent in turn (devices differ). */
     View iconButton(int type, String label, Intent... intents) {
@@ -1003,8 +1021,12 @@ public class Home extends Activity {
         if (quick != null) quick.close();
         String n = Prefs.name(this);
         java.util.List<Tour.Step> st = new java.util.ArrayList<>();
-        st.add(new Tour.Step(null, "Welcome", n.isEmpty() ? "Welcome to your new home screen" : "Welcome, " + n,
+        boolean unnamed = Prefs.defaultName(this) || n.isEmpty();
+        st.add(new Tour.Step(null, "Welcome", unnamed ? "Welcome to your new home screen" : "Welcome, " + n,
             "A quick look at what's here and how to use it with the remote. Next and Back move through the tour; Skip ends it any time."));
+        if (unnamed) st.add(new Tour.Step(() -> greeting, "Make it yours", "Hello, User? Let's fix that",
+            "The greeting says \"User\" until you add your name. Open Launcher settings and type your name at the top; your photo can go on the round avatar beside it.",
+            "Add my name", () -> startActivity(new Intent(this, Personal.class))));
         st.add(new Tour.Step(() -> timeRow, "Header", "Time, date and a greeting",
             "Choose what shows here (seconds, year, greeting) in Quick settings, then Launcher settings."));
         st.add(new Tour.Step(() -> tourIcons, "Top icons", "Voice, inputs and Quick settings",
@@ -1023,7 +1045,9 @@ public class Home extends Activity {
         addSection(st, "all", "All apps", "Every app on the TV",
             "Phone apps show with their own icons too. Hold OK on an app for the same options as above.");
         st.add(new Tour.Step(() -> tourAvatar, "You", "Your profile and settings",
-            "Your photo opens Launcher settings: your name, background photos, arrange or hide rows, hidden apps and header options."));
+            unnamed ? "Your avatar opens Launcher settings. Change \"User\" to your name there, then background photos, rows, hidden apps and header options."
+                : "Your photo opens Launcher settings: your name, background photos, arrange or hide rows, hidden apps and header options.",
+            unnamed ? "Add my name" : null, unnamed ? () -> startActivity(new Intent(this, Personal.class)) : null));
         st.add(new Tour.Step(() -> tourCardView, "Tour", "Come back any time",
             "This card at the end of the home screen replays the tour, for you or anyone else using the TV. It's also in the Control centre."));
         st.add(new Tour.Step(null, "Done", "That's everything",
@@ -1309,7 +1333,11 @@ public class Home extends Activity {
         if (officeCodex != null) h.post(officeTick);
     }
 
-    @Override public void onWindowFocusChanged(boolean f) { super.onWindowFocusChanged(f); ambient.run(f); }
+    @Override public void onWindowFocusChanged(boolean f) {
+        super.onWindowFocusChanged(f);
+        ambient.run(f);
+        if (f) { loadAvatar(); tick.run(); } // a photo or name pushed while the home screen was up shows at once
+    }
 
     @Override protected void onPause() {
         h.removeCallbacks(pipPoll);

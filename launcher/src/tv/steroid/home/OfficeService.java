@@ -67,6 +67,7 @@ public class OfficeService extends Service {
 
     void collect() {
         long seen = prefs.getLong("seenEvent", -1);
+        android.util.Log.i("SteroidOffice", "collect: " + Office.events.size() + " events, last seen " + seen);
         if (seen < 0) { // first contact: everything so far is history, not news
             long max = 0;
             for (Office.Event e : Office.events) max = Math.max(max, e.id);
@@ -88,7 +89,8 @@ public class OfficeService extends Service {
         long now = System.currentTimeMillis();
         if (pending.isEmpty() || toast != null) return;
         if (now - pendingSince < GROUP_MS || now - lastToast < COOLDOWN_MS) return;
-        if (!Settings.canDrawOverlays(this)) { pending.clear(); return; }
+        if (!Settings.canDrawOverlays(this)) { android.util.Log.w("SteroidOffice", "can't show notices: display over other apps is off"); pending.clear(); return; }
+        android.util.Log.i("SteroidOffice", "showing " + pending.size() + " notice(s)");
         show(new ArrayList<>(pending));
         pending.clear();
         lastToast = now;
@@ -233,7 +235,8 @@ public class OfficeService extends Service {
     }
 
     void showPrompt(Approvals.Request q, int waiting) {
-        if (!Settings.canDrawOverlays(this)) return;
+        android.util.Log.i("SteroidOffice", "approval request " + q.id + " from " + q.computer);
+        if (!Settings.canDrawOverlays(this)) { android.util.Log.w("SteroidOffice", "can't show approval: display over other apps is off"); return; }
         Ui.init(this);
         showing = q;
         handled.add(q.id);

@@ -120,7 +120,10 @@ final class Office {
         boolean any = false;
         for (String[] t : targets) {
             JSONObject o = fetch(t[1], t[2]);
-            if (o == null) continue;
+            if (o == null) { android.util.Log.i("SteroidOffice", "no answer from " + t[0] + " at " + t[1] + ":" + t[2]); continue; }
+            JSONArray evl = o.optJSONArray("events");
+            android.util.Log.i("SteroidOffice", "answer from " + t[0] + ": " + (evl == null ? 0 : evl.length()) + " events, "
+                + o.optInt("approvals") + " approvals waiting");
             any = true;
             String comp = o.optString("computer", t[0].replace("Little Office", "").trim());
             if (comp.isEmpty()) comp = "Computer";

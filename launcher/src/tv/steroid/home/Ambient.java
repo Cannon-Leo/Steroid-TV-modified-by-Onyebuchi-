@@ -39,26 +39,59 @@ class Ambient extends View {
      */
     static final int[] FREE_IDS = {10, 11, 15, 16, 17, 18, 28, 29, 37, 41, 42, 43, 49, 54, 57, 58, 76, 84, 101, 110,
         116, 120, 122, 124, 128, 129, 142, 152, 167, 184, 188, 191, 200, 214};
+    /**
+     * Picked from Unsplash's "TV wallpaper" search: landscapes, sky, sea and wildlife with no words,
+     * logos or watermarks in the picture. Unsplash+ (paid, watermarked) photos are left out.
+     */
+    static final String[] UNSPLASH = {
+        "photo-1491466424936-e304919aada7", // northern lights
+        "photo-1499678329028-101435549a4e", // Vernazza at sunset
+        "photo-1484950763426-56b5bf172dbb", // off road car at dusk
+        "photo-1482784160316-6eb046863ece", // Yosemite Tunnel View in snow
+        "photo-1469474968028-56623f02e42e", // mountain in sun rays
+        "photo-1451187580459-43490279c0fa", // outer space
+        "photo-1507187632231-5beb21a654a2", // palms reflected in water
+        "photo-1504006833117-8886a355efbf", // squirrel on black
+        "photo-1500673922987-e212871fec22", // lights between trees
+        "photo-1431440869543-efaf3388c585", // lightning storm
+        "photo-1475598322381-f1b499717dda", // lava meeting the ocean
+        "photo-1505699261378-c372af38134c", // Xinghai Bridge at sunset
+        "photo-1507608869274-d3177c8bb4c7", // hot air balloons
+        "photo-1508144753681-9986d4df99b3", // looking up a mountain
+        "photo-1466853817435-05b43fe45b39", // mountain and water at night
+        "photo-1430876988766-1be68caef0e4", // sleeping tiger
+    };
     static volatile boolean fetching;
+
+    /** Every free photo: {file name, address}. */
+    static java.util.List<String[]> freeList() {
+        java.util.List<String[]> l = new java.util.ArrayList<>();
+        for (String id : UNSPLASH) l.add(new String[]{"s" + id.substring(6, 19) + ".jpg",
+            "https://images.unsplash.com/" + id + "?fm=jpg&q=80&w=1920&h=1080&fit=crop&crop=entropy"});
+        for (int id : FREE_IDS) l.add(new String[]{"u" + id + ".jpg", "https://picsum.photos/id/" + id + "/1920/1080.jpg"});
+        return l;
+    }
 
     static void fetchFree(Context c) {
         if (fetching) return;
         File dir = c.getExternalFilesDir(FREE);
         if (dir == null) return;
         long lastTry = Prefs.sp(c).getLong("freeTried", 0);
+        java.util.List<String[]> list = freeList();
         int have = 0;
-        for (int id : FREE_IDS) if (new File(dir, "u" + id + ".jpg").exists()) have++;
-        if (have == FREE_IDS.length || System.currentTimeMillis() - lastTry < 6 * 3600_000L && have > 0) return;
+        for (String[] f : list) if (new File(dir, f[0]).exists()) have++;
+        if (have == list.size() || System.currentTimeMillis() - lastTry < 6 * 3600_000L && have > 0 && Prefs.sp(c).getBoolean("freeV2", false)) return;
+        Prefs.sp(c).edit().putBoolean("freeV2", true).apply(); // new photos added: fetch them now, once
         Prefs.sp(c).edit().putLong("freeTried", System.currentTimeMillis()).apply();
         fetching = true;
         new Thread(() -> {
             try {
-                for (int id : FREE_IDS) {
-                    File out = new File(dir, "u" + id + ".jpg"), tmp = new File(dir, "u" + id + ".part");
+                for (String[] item : list) {
+                    File out = new File(dir, item[0]), tmp = new File(dir, item[0] + ".part");
                     if (out.exists()) continue;
                     java.net.HttpURLConnection conn = null;
                     try {
-                        conn = (java.net.HttpURLConnection) new java.net.URL("https://picsum.photos/id/" + id + "/1920/1080.jpg").openConnection();
+                        conn = (java.net.HttpURLConnection) new java.net.URL(item[1]).openConnection();
                         conn.setConnectTimeout(8000);
                         conn.setReadTimeout(15000);
                         conn.setInstanceFollowRedirects(true);
