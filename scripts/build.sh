@@ -12,14 +12,16 @@ if [ ! -f "$KS" ]; then
     -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 -validity 10000 >/dev/null 2>&1
 fi
 O="$L/out"; rm -rf "$O"; mkdir -p "$O/classes" "$O/dex"
+# Resources (Lucide icons) first: aapt2 writes R.java, which the code needs.
+"$BT/aapt2" compile --dir "$L/res" -o "$O/res.zip"
+"$BT/aapt2" link -I "$JAR" --manifest "$L/AndroidManifest.xml" -A "$L/assets" -R "$O/res.zip" --java "$O/gen" -o "$O/base.apk"
 # --release 8 (not -source/-target + bootclasspath): lambdas need the JDK's LambdaMetafactory at compile time
 # argument files keep paths with spaces intact
-find "$L/src" -name '*.java' | sed 's/.*/"&"/' > "$O/sources.txt"
+find "$L/src" "$O/gen" -name '*.java' | sed 's/.*/"&"/' > "$O/sources.txt"
 javac --release 8 -classpath "$JAR" -d "$O/classes" @"$O/sources.txt" 2>&1 | grep -v -E "^Note:|warning" || true
 find "$O/classes" -name '*.class' > "$O/classes.txt"
 [ -s "$O/classes.txt" ] || { echo "COMPILE FAILED"; exit 1; }
 "$BT/d8" --min-api 26 --lib "$JAR" --output "$O/dex" @"$O/classes.txt"
-"$BT/aapt2" link -I "$JAR" --manifest "$L/AndroidManifest.xml" -A "$L/assets" -o "$O/base.apk"
 (cd "$O" && zip -qj base.apk dex/classes.dex)
 "$BT/zipalign" -f 4 "$O/base.apk" "$O/aligned.apk"
 "$BT/apksigner" sign --ks "$KS" --ks-pass pass:android --out "$O/SteroidHome.apk" "$O/aligned.apk"

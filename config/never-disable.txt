@@ -56,3 +56,12 @@ com.mitv.dream
 com.xiaomi.mitv.smartshare
 com.xiaomi.tvqs.overseas
 com.mstar.android.tv.disclaimercustomization
+# Amlogic (droidlogic) plumbing on the Mi TV Stick: display, HDMI out, networking, Miracast
+com.droidlogic
+com.droidlogic.overlay
+com.android.networkstack.tethering.droidlogic
+com.android.networkstack.tethering.inprocess.droidlogic
+com.xiaomi.wfdsinkhelperservice
+com.xiaomi.android.tvsetup.partnercustomizer
+android.autoinstalls.config.xioami.mibox3
+com.google.android.play.games

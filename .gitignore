@@ -7,3 +7,10 @@ backup/
 .DS_Store
 *.apk
 *.idsig
+
+# local diagnostics and scratch
+diag/
+devtmp/
+_to_delete/
+__pycache__/
+*.pyc
