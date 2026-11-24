@@ -14,9 +14,16 @@ from PIL import Image, ImageFilter, ImageOps
 
 
 def main(folder):
+    import json
+    print("Checking photos for a clear subject (the first time downloads the cut out model, about 180 MB)...", flush=True)
     from rembg import new_session, remove
     session = new_session("isnet-general-use")
     made = skipped = 0
+    memo_path = os.path.join(folder, ".depth-checked.json")  # photos already checked and left without depth
+    try:
+        memo = json.load(open(memo_path))
+    except Exception:
+        memo = {}
     for n in sorted(os.listdir(folder)):
         low = n.lower()
         if ".mask." in low or not low.endswith((".jpg", ".jpeg", ".png", ".webp")) or low.startswith("profile."):
@@ -25,6 +32,8 @@ def main(folder):
         src = os.path.join(folder, n)
         if os.path.exists(out) and os.path.getmtime(out) >= os.path.getmtime(src):
             continue
+        if memo.get(n) == int(os.path.getmtime(src)):
+            continue  # checked before: no depth for this one
         im = ImageOps.exif_transpose(Image.open(src)).convert("RGB")  # upright, as the TV shows it
         if im.width > 1280:
             im = im.resize((1280, round(im.height * 1280 / im.width)), Image.LANCZOS)
@@ -46,12 +55,16 @@ def main(folder):
             if os.path.exists(out):
                 os.remove(out)
             skipped += 1
-            print(f"no depth: {n} (clock {over:.0%}, solid {solid:.0%}, subject {cover:.0%})")
+            memo[n] = int(os.path.getmtime(src))
+            print(f"no depth: {n}", flush=True)
             continue
         m.save(out, optimize=True)
+        memo.pop(n, None)
         made += 1
-        print(f"depth mask: {n} (subject covers {over:.0%} of the clock)")
-    print(f"{made} masks made, {skipped} photos without a clear subject")
+        print(f"depth mask: {n}", flush=True)
+    with open(memo_path, "w") as f:
+        json.dump(memo, f)
+    print(f"{made} masks made, {skipped} photos without a clear subject", flush=True)
 
 
 if __name__ == "__main__":
