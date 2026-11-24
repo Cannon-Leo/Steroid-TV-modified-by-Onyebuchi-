@@ -133,8 +133,9 @@ P
     "$0" myphotos
     echo "== 4/5  Screensaver"
     "$0" screensaver
-    echo "== 5/5  Tidy up"
+    echo "== 5/5  Tidy up and privacy guard"
     rm -f "$HOME/.little-office/photos/masks.tgz"
+    scripts/privacy-guard.sh
     echo "All done. Press Home on the TV; your photos arrive within a minute." ;;
   update)  # the whole fix in one go: build, install on the TV, refresh Little Office, then check the TV
     scripts/build.sh && "$0" install && little-office/install.sh && scripts/diag.sh ;;
