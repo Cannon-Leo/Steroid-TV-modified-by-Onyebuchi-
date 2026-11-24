@@ -1,5 +1,5 @@
 #!/opt/homebrew/bin/python3
-"""Little Office: a read-only glance at Claude Code and Codex activity for the Steroid TV launcher.
+"""Little Office: a read-only glance at Claude Code, Codex and Gemini (Antigravity) activity for the Steroid TV launcher.
 
 Serves GET /status on the local network (private addresses only) with, per recent session:
 project, agent, state (working / needs_you / finished / idle) and one short sentence.
@@ -11,7 +11,11 @@ Edit ~/.little-office/config.json to choose pinned projects:
 import glob
 import json
 import os
+import platform
 import re
+import socket
+import sqlite3
+import urllib.parse
 import subprocess
 import threading
 import time
@@ -22,6 +26,7 @@ from ipaddress import ip_address
 HOME = os.path.expanduser("~")
 CONFIG = os.path.join(HOME, ".little-office", "config.json")
 PORT = 8765
+COMPUTER = None  # set at start
 RECENT = 6 * 3600          # sessions touched in the last 6 hours are worth a glance
 WORKING_QUIET = 150        # a session silent this long is no longer "working"...
 TOOL_QUIET = 20 * 60       # ...unless it's waiting on a long-running tool
@@ -245,13 +250,142 @@ def codex_sessions(now, names):
     return out
 
 
+# ---------- Gemini (Antigravity): reads its own conversation index, read-only ----------
+
+AG_DB = os.path.join(HOME, ".gemini", "antigravity", "conversation_summaries.db")
+
+
+def ag_time(s):
+    """Antigravity writes '2026-11-24 02:48:03.27476+00:00' (any number of fraction digits)."""
+    try:
+        m = re.match(r"(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})(?:\.(\d+))?(.*)$", s or "")
+        if not m:
+            return None
+        frac = (m.group(3) or "0")[:6].ljust(6, "0")
+        tz = m.group(4) or "+00:00"
+        if tz == "Z":
+            tz = "+00:00"
+        return datetime.fromisoformat(f"{m.group(1)}T{m.group(2)}.{frac}{tz}").timestamp()
+    except Exception:
+        return None
+
+
+def gemini_sessions(now, names):
+    if not os.path.exists(AG_DB):
+        return []
+    out = []
+    try:
+        con = sqlite3.connect(f"file:{AG_DB}?mode=ro", uri=True, timeout=2)
+        rows = con.execute("select conversation_id, title, preview, last_modified_time, workspace_uris, status, "
+                           "not_fully_idle, killed, last_user_input_time, nesting_depth from conversation_summaries").fetchall()
+        con.close()
+    except Exception as e:
+        print("gemini read failed:", e, flush=True)
+        return []
+    for cid, title, preview, modified, ws, status, busy, killed, last_input, depth in rows:
+        if depth:          # sub-agents roll up into their parent task
+            continue
+        at = ag_time(modified)
+        if at is None or now - at > RECENT:
+            continue
+        cwd = ""
+        try:
+            uris = json.loads(ws) if ws else []
+            if uris:
+                cwd = urllib.parse.unquote(urllib.parse.urlparse(uris[0]).path)
+        except Exception:
+            pass
+        st = (status or "").upper()
+        quiet = now - at
+        if any(k in st for k in ("WAIT", "PENDING", "APPROVAL", "USER_INPUT", "BLOCKED")):
+            state = "needs_you"
+        elif (any(k in st for k in ("RUNNING", "BUSY", "ACTIVE", "EXECUT")) or busy) and quiet < TOOL_QUIET:
+            state = "working"
+        elif killed:
+            state = "finished"
+        else:
+            inp = ag_time(last_input) or 0
+            state = "finished" if at > inp + 5 else "idle"
+        out.append({"key": "gemini:" + cid, "agent": "Gemini", "project": project_name(cwd, names) if cwd else (title or "Antigravity"),
+                    "title": title or "", "state": state, "text": sentence(title or preview or ""), "at": at})
+    return out
+
+
+# ---------- Which agents exist on this Mac, and the last thing each did ----------
+
+def ago(t, now):
+    m = int((now - t) // 60)
+    if m < 1:
+        return "just now"
+    if m < 60:
+        return f"{m} min ago"
+    h = m // 60
+    return f"{h} h ago" if h < 48 else f"{h // 24} days ago"
+
+
+WINDOWS = platform.system() == "Windows"
+
+
+def computer_name():
+    """A friendly name for this computer, shown on the TV ("MacBook Pro", "DESKTOP-ABC")."""
+    if not WINDOWS:
+        try:
+            n = subprocess.run(["scutil", "--get", "ComputerName"], capture_output=True, text=True, timeout=2).stdout.strip()
+            if n:
+                return n
+        except Exception:
+            pass
+    return platform.node().split(".")[0] or "Computer"
+
+
+def app_running(name):
+    try:
+        if WINDOWS:
+            out = subprocess.run(["tasklist", "/FI", f"IMAGENAME eq {name}.exe", "/NH"], capture_output=True, text=True,
+                                 timeout=4, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout
+            return f"{name}.exe".lower() in out.lower()
+        return subprocess.run(["pgrep", "-x", name], capture_output=True, timeout=2).returncode == 0
+    except Exception:
+        return False
+
+
+def agents(now):
+    out = []
+    # Claude: Claude Code in Terminal keeps local logs; the Claude app's sessions run in the cloud
+    has_cli = os.path.isdir(os.path.join(HOME, ".claude", "projects"))
+    app = app_running("Claude")
+    if has_cli:
+        note = ""
+    elif app:
+        note = "App open. Its sessions run in the cloud, so their status isn't on this Mac"
+    else:
+        note = "Not on this computer"
+    out.append({"name": "Claude", "installed": has_cli or app, "note": note})
+    has_codex = os.path.isdir(os.path.join(HOME, ".codex"))
+    out.append({"name": "Codex", "installed": has_codex, "note": "" if has_codex else "Not on this computer"})
+    note, inst = "Not on this computer", False
+    if os.path.exists(AG_DB):
+        inst = True
+        try:
+            con = sqlite3.connect(f"file:{AG_DB}?mode=ro", uri=True, timeout=2)
+            r = con.execute("select title, last_modified_time from conversation_summaries where nesting_depth = 0 "
+                            "order by last_modified_time desc limit 1").fetchone()
+            con.close()
+            t = ag_time(r[1]) if r else None
+            note = f"Last: {sentence(r[0], 48)} · {ago(t, now)}" if r and t else "No tasks yet"
+        except Exception:
+            note = "Antigravity found"
+    out.append({"name": "Gemini", "installed": inst, "note": note})
+    return out
+
+
 # ---------- Snapshot + events ----------
 
 def snapshot():
     now = time.time()
     cfg = config()
     names = cfg.get("names", {})
-    sessions = claude_sessions(now, names) + codex_sessions(now, names)
+    sessions = claude_sessions(now, names) + codex_sessions(now, names) + gemini_sessions(now, names)
     with lock:
         for s in sessions:
             prev = last_state.get(s["key"])
@@ -265,7 +399,8 @@ def snapshot():
     sessions.sort(key=lambda s: -s["at"])
     for s in sessions:
         s.pop("key", None)
-    return {"generated_at": now, "pinned": cfg.get("pinned", []), "sessions": sessions, "events": evs}
+    return {"generated_at": now, "pinned": cfg.get("pinned", []), "sessions": sessions, "events": evs,
+            "agents": agents(now), "computer": COMPUTER}
 
 
 def watcher():
@@ -313,7 +448,24 @@ if __name__ == "__main__":
             json.dump({"pinned": [], "names": {}}, f, indent=2)
     snapshot()  # baseline, so existing states don't fire notifications
     threading.Thread(target=watcher, daemon=True).start()
-    # Announce on the network so the TV finds this Mac even if its address changes.
-    subprocess.Popen(["/usr/bin/dns-sd", "-R", "Little Office", "_littleoffice._tcp", "local", str(PORT)],
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    COMPUTER = computer_name()
+    # Announce on the network so the TV finds this computer even if its address changes.
+    # Each computer uses its own name, so a Mac and a Windows PC can both be found at once.
+    service = f"Little Office {COMPUTER}"[:60]
+    if WINDOWS:
+        try:
+            from zeroconf import ServiceInfo, Zeroconf  # installed by install-windows.ps1
+            ip = socket.gethostbyname(socket.gethostname())
+            try:  # prefer the address used to reach the network
+                sk = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); sk.connect(("192.168.1.1", 9)); ip = sk.getsockname()[0]; sk.close()
+            except Exception:
+                pass
+            zc = Zeroconf()
+            zc.register_service(ServiceInfo("_littleoffice._tcp.local.", f"{service}._littleoffice._tcp.local.",
+                                            addresses=[socket.inet_aton(ip)], port=PORT, server=f"{socket.gethostname()}.local."))
+        except Exception as e:
+            print("announce failed:", e, flush=True)
+    else:
+        subprocess.Popen(["/usr/bin/dns-sd", "-R", service, "_littleoffice._tcp", "local", str(PORT)],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
