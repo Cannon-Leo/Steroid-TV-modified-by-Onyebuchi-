@@ -24,6 +24,7 @@ class Ambient extends View {
     final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
     final Paint shade = new Paint(), photoShade = new Paint(), sideShade = new Paint(), grain = new Paint(), dreamTop = new Paint();
     boolean dream; // the screensaver: photos at full brightness
+    float lumNow = 0.4f; // brightness behind the clock right now (the screensaver adapts its text to it)
     final Paint img = new Paint(Paint.FILTER_BITMAP_FLAG), fadePaint = new Paint(Paint.FILTER_BITMAP_FLAG);
     int tint = 0xFFE8915A, shown = tint, second = 0xFF5B3CC4;
     float t;
@@ -121,6 +122,29 @@ class Ambient extends View {
     final ExecutorService io = Executors.newSingleThreadExecutor();
     final Handler h = new Handler(Looper.getMainLooper());
     Bitmap cur, prev, curFg, prevFg;
+    float curLum = 0.4f, prevLum = 0.4f; // how bright the photo is behind the screensaver's clock (0 to 1)
+
+    /**
+     * Brightness behind the clock, the way the photo fills the screen: the top middle of the frame.
+     * Bright patches under the digits matter most, so the brighter end counts more than the average.
+     */
+    static float clockLum(Bitmap b, int w, int h) {
+        if (b == null) return 0.4f;
+        float s = Math.max((float) w / b.getWidth(), (float) h / b.getHeight());
+        float ox = (w - b.getWidth() * s) / 2, oy = (h - b.getHeight() * s) / 2;
+        int n = 0; float sum = 0; float[] v = new float[24 * 12];
+        for (int j = 0; j < 12; j++) for (int i = 0; i < 24; i++) {
+            float sx = w * (0.22f + 0.56f * i / 23f), sy = h * (0.04f + 0.50f * j / 11f);
+            int bx = Math.max(0, Math.min(b.getWidth() - 1, (int) ((sx - ox) / s)));
+            int by = Math.max(0, Math.min(b.getHeight() - 1, (int) ((sy - oy) / s)));
+            int px = b.getPixel(bx, by);
+            float l = (0.2126f * Color.red(px) + 0.7152f * Color.green(px) + 0.0722f * Color.blue(px)) / 255f;
+            v[n++] = l; sum += l;
+        }
+        java.util.Arrays.sort(v, 0, n);
+        float mean = sum / n, high = v[(int) (n * 0.85f)];
+        return Math.max(mean, high * 0.9f);
+    }
 
     /** Drawn between the photo and its subject in the screensaver, so the subject can stand in front (the clock). */
     interface Overlay { void draw(Canvas c, int w, int h); void drawFront(Canvas c, int w, int h); }
@@ -251,6 +275,7 @@ class Ambient extends View {
             Bitmap b = decode(src);
             Bitmap fr = dream ? null : Glass.make(b, getWidth() > 0 ? getWidth() : 1920, getHeight() > 0 ? getHeight() : 1080);
             Bitmap fg = dream && b != null ? foreground(src, b) : null;
+            float lum = dream ? clockLum(b, getWidth() > 0 ? getWidth() : 1920, getHeight() > 0 ? getHeight() : 1080) : 0.4f;
             h.post(() -> {
                 if (b == null) { // can't read this one: straight on to the next
                     android.util.Log.w("SteroidAmbient", "skipped unreadable " + src);
@@ -260,6 +285,7 @@ class Ambient extends View {
                 if (b != null) {
                     if (!dream) { Glass.frost = fr; Glass.refresh(); }
                     prevFg = curFg; curFg = fg;
+                    prevLum = curLum; curLum = lum;
                     prev = cur; cur = b;
                     fadeStart = curSince = System.currentTimeMillis();
                     tint(average(b));
@@ -309,7 +335,8 @@ class Ambient extends View {
             new float[]{0f, 0.3f, 0.62f, 1f}, Shader.TileMode.CLAMP));
         // photos need more darkening behind the clock (top) and the rows (bottom)
         // screensaver: full colour, only a light shade at the top behind the clock and weather
-        dreamTop.setShader(new LinearGradient(0, 0, 0, h * 0.42f, 0x73000000, 0x00000000, Shader.TileMode.CLAMP));
+        dreamTop.setShader(new LinearGradient(0, 0, 0, h * 0.62f, new int[]{0xFF000000, 0xB3000000, 0x00000000},
+            new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP)); // its strength follows the photo (see onDraw)
         photoShade.setShader(new LinearGradient(0, 0, 0, h,
             new int[]{0xCC000000, 0x99000000, 0xD9000000, 0xF7050508},
             new float[]{0f, 0.35f, 0.6f, 1f}, Shader.TileMode.CLAMP));
@@ -327,7 +354,12 @@ class Ambient extends View {
             if (prev != null && fade < 1f) photo(c, prev, now - fadeStart + Prefs.interval(getContext()) * 1000L, 255, w, hgt);
             photo(c, cur, now - curSince, (int) (255 * fade), w, hgt);
             if (dream) { // screensaver: clock and weather, then each photo's subject in front of them
-                c.drawRect(0, 0, w, hgt * 0.42f, dreamTop);
+                // contrast: the brighter the photo behind the clock, the deeper the shade (bright skies, snow, white walls)
+                float lum = prevLum + (curLum - prevLum) * fade;
+                lumNow = lum;
+                float a = Math.max(0.30f, Math.min(0.82f, 0.30f + 0.9f * (lum - 0.32f)));
+                dreamTop.setAlpha(Math.round(255 * a));
+                c.drawRect(0, 0, w, hgt * 0.62f, dreamTop);
                 if (overlay != null) overlay.draw(c, w, hgt);
                 if (prevFg != null && fade < 1f) photo(c, prevFg, now - fadeStart + Prefs.interval(getContext()) * 1000L, (int) (255 * (1 - fade)), w, hgt);
                 if (curFg != null) photo(c, curFg, now - curSince, (int) (255 * fade), w, hgt);
@@ -341,7 +373,8 @@ class Ambient extends View {
                 c.drawRect(0, 0, w, hgt, sideShade);
             }
             boolean moving = fade < 1f || Prefs.drift(getContext());
-            if (running && moving) postInvalidateDelayed(83);
+            if (running && dream) postInvalidateDelayed(40);        // seconds and the weather icon move
+            else if (running && moving) postInvalidateDelayed(83);
             return;
         }
         shown = blend(shown, tint, 0.07f);

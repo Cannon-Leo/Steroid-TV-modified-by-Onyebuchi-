@@ -259,7 +259,10 @@ Launcher settings, Weather place) over a large clock, and the **depth effect**: 
 subject, the subject stands in front of the clock. Depth masks are made on the computer by
 `little-office/depth.py` (rembg, once: `pip3 install "rembg[cpu]"`), automatically by `buchi.sh myphotos`,
 only for photos where the subject is solid and leaves the time readable. Turn depth off in Launcher
-settings, Background. The clock shifts a few pixels each minute (no burn in). Turn it on with
+settings, Background. The clock is 12 hour with AM/PM and running seconds, the weather icon moves with the weather (the sun
+turns, clouds drift, rain and snow fall, storms flash), and the contrast follows each photo: the brighter
+the picture behind the clock, the deeper the shade and the firmer the shadows. The clock shifts a few
+pixels each minute (no burn in). Turn it on with
 `scripts/buchi.sh screensaver`. Google's Backdrop can't take your photos: Google decides what it shows.
 
 ### Something not reaching the TV?
