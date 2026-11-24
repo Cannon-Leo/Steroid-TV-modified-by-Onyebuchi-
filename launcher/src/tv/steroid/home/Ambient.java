@@ -270,6 +270,8 @@ class Ambient extends View {
             if (prev != null && fade < 1f) photo(c, prev, now - fadeStart + Prefs.interval(getContext()) * 1000L, 255, w, hgt);
             photo(c, cur, now - curSince, (int) (255 * fade), w, hgt);
             if (fade >= 1f && prev != null) prev = null; // free the old image
+            // "Background" slider in the Control centre: how dark the photo is behind the text (45 to 100%)
+            photoShade.setAlpha(Math.round(255 * (0.45f + 0.55f * Prefs.sp(getContext()).getInt("bgDim", 100) / 100f)));
             c.drawRect(0, 0, w, hgt, photoShade);
             c.drawRect(0, 0, w, hgt, sideShade);
             boolean moving = fade < 1f || Prefs.drift(getContext());

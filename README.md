@@ -75,11 +75,12 @@ centre, or the compass in Little Office.
 - A redesigned settings page (grouped cards, Lucide icons, real switches): your name, photo slideshow,
   slow zoom, how often photos change, **Arrange home** (move sections, sizes S / M / L, show or hide), and
   hidden apps, and header options (clock, seconds, date, year, greeting, system card, glass or solid).
-- **Control Centre** (the gear), laid out like iOS and HyperOS: a grid of rounded modules on frosted glass.
-  The connectivity module (Wi‑Fi, Bluetooth, Mute, Screensaver as round toggles that light up when on;
-  hold OK for their settings) sits beside a now playing module (art, title, previous, play, next); then a
-  tall volume slider (up and down, OK mutes) beside square shortcuts (Display, Recents, Inputs, Apps,
-  Date & time, Settings), then Launcher, Glass (white when on), Tour and Privacy.
+- **Control centre** (the gear), in the style of Xiaomi HyperOS 4 on frosted glass, all Lucide icons:
+  Wi‑Fi and Bluetooth tiles that turn light when on, a now playing card beside two tall sliders (volume,
+  and how dark the background photo is), a capsule of shortcuts (Recent apps, Inputs, Display, All
+  settings), round toggles that turn light when on (Screensaver, Mute, Glass, Mini player) and buttons
+  (Launcher settings, Apps, Date and time, Privacy), and a Tour pill. Round buttons have no labels, as on
+  HyperOS: the line under the date names whatever is selected. Hold OK on a toggle for its settings.
 - **Mini player rescue:** when any app is left floating in a mini player (picture in picture), a bar at
   the top of the home screen says so, with **Full screen** (already selected: one OK) and **Close**. The
   Control centre has a **Mini player** button too, and pressing **Home** while you're already on the home
