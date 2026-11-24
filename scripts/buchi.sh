@@ -75,6 +75,11 @@ case "$1" in
   myphotos)  # your own photos and profile picture, from the folder named in personal/photos-folder (never committed)
     F="$(cat personal/photos-folder 2>/dev/null)"
     [ -d "$F" ] || { echo "Put your photo folder's path in personal/photos-folder first."; exit 1; }
+    case "$F" in "$HOME"/Downloads*|"$HOME"/Desktop*|"$HOME"/Documents*)
+      echo "Note: macOS can hold Terminal silently on $F until you allow it. If this seems stuck, press Ctrl+C,"
+      echo "move the photos to personal/photos in this folder and put that path in personal/photos-folder.";;
+    esac
+    echo "Preparing photos from $F ..."
     # a private copy Little Office can serve to paired TVs (macOS keeps background services out of Downloads);
     # photos named in personal/skip-photos (ones with words on them, say) are left out
     L="$HOME/.little-office/photos"; mkdir -p "$L"

@@ -323,7 +323,8 @@ Codex and Antigravity have no permission hook, so they can only notify the TV, n
 
 ## Your photos and profile picture
 
-Private photos stay off GitHub: put your folder's path in `personal/photos-folder` (ignored by git, like
+Private photos stay off GitHub: keep them in `personal/photos` (macOS never blocks Terminal there, unlike
+Downloads, Desktop and Documents) or put another folder's path in `personal/photos-folder` (ignored by git, like
 every image outside the app's own resources) and run `scripts/buchi.sh myphotos`. Little Office then serves
 them to paired TVs only (signed requests) and the TV fetches them into a folder it creates itself, within
 a minute and every 10 minutes after, so the avatar and slideshow never depend on adb file access.
