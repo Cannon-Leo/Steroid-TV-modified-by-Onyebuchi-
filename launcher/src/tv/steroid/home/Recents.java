@@ -44,11 +44,19 @@ public class Recents extends Activity {
         all.setBackground(g);
         all.setPadding(Ui.px(22), 0, Ui.px(22), 0);
         all.setOnFocusChangeListener((v, f) -> g.setColor(f ? 0x40FFFFFF : 0x26FFFFFF));
-        all.setOnClickListener(v -> { for (Apps.App a : recent) kill(a.pkg); toast("Closed " + recent.size() + " apps"); load(); });
+        all.setOnClickListener(v -> {
+            // everything: every app on the TV, not only those listed here
+            List<String> pkgs = new ArrayList<>();
+            for (Apps.App a : Apps.all(this)) pkgs.add(a.pkg);
+            for (Apps.App a : recent) if (!pkgs.contains(a.pkg)) pkgs.add(a.pkg);
+            Clear.all(this, pkgs);
+            toast(recent.isEmpty() ? "Everything is closed" : "Closed " + recent.size() + (recent.size() == 1 ? " app" : " apps") + " and stopped all playback");
+            load();
+        });
         top.addView(all, new LinearLayout.LayoutParams(-2, Ui.px(44)));
         col.addView(top);
         TextView hint = Ui.text(this, Ui.sans, 13, 0x99FFFFFF);
-        hint.setText("OK to open · hold OK to close");
+        hint.setText("OK to open · hold OK for options (close, app info, uninstall) · Close all stops everything");
         hint.setPadding(0, Ui.px(8), 0, Ui.px(24));
         col.addView(hint);
         grid = new LinearLayout(this);
@@ -81,7 +89,11 @@ public class Recents extends Activity {
         Map<String, Long> last = new HashMap<>();
         for (UsageStats s : stats) if (s.getLastTimeUsed() > 0)
             last.put(s.getPackageName(), Math.max(s.getLastTimeUsed(), last.containsKey(s.getPackageName()) ? last.get(s.getPackageName()) : 0));
-        for (Apps.App a : all) if (last.containsKey(a.pkg) && last.get(a.pkg) > now - 86400000L) recent.add(a);
+        for (Apps.App a : all) {
+            if (a.pkg.equals(getPackageName())) continue;
+            Long t = last.get(a.pkg);
+            if (t != null && t > now - 86400000L && !Clear.closedSince(this, a.pkg, t)) recent.add(a); // closed apps stay gone
+        }
         Collections.sort(recent, (x, y) -> Long.compare(last.get(y.pkg), last.get(x.pkg)));
         if (recent.size() > 18) recent = new ArrayList<>(recent.subList(0, 18));
         float w = (Ui.dpWidth(this) - 128 - 5 * 18) / 6f;
@@ -94,7 +106,10 @@ public class Recents extends Activity {
                 grid.addView(row);
             }
             Apps.App a = recent.get(i);
-            View c = Apps.card(this, a, null, v -> { kill(a.pkg); toast("Closed " + a.label); load(); return true; });
+            View c = Apps.card(this, a, null, v -> {
+                Apps.menu(this, a, new String[]{"Close app"}, new Runnable[]{() -> { Clear.one(this, a.pkg); toast("Closed " + a.label); load(); }}, this::load);
+                return true;
+            });
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(Ui.px(w), Ui.px(w * 0.58f));
             if (i % 6 != 5) lp.rightMargin = Ui.px(18);
             row.addView(c, lp);

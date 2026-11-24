@@ -103,3 +103,4 @@ HOOK_REQUEST = Object(tool=String(1, 80, r"[\w.:\-]+"), summary=String(0, 300), 
 REQUEST_ID = HEX(16)
 SIGNED_HEADERS = Object(device=HEX(32), time=String(9, 11, r"\d+"), nonce=HEX(16), sig=HEX(64))
 WAIT_SECONDS = Int(1, 30)
+NOTIFY = Object(agent=Enum("Claude", "Codex", "Gemini"), kind=Enum("needs_you", "finished"), text=String(0, 300), cwd=String(0, 1024))

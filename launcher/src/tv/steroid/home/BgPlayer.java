@@ -52,6 +52,8 @@ public class BgPlayer extends Service {
     // ---------- handoff: what YouTube was playing when it stopped ----------
     static String lastPkg, lastId, lastTitle, lastArtist;
     static long lastPos, stoppedAt, homeAt;
+    /** Set when you close things on purpose (Close all, the widget's close): no pick up until then. */
+    static volatile long suppressUntil;
 
     static boolean isYouTube(String pkg) { return YT.equals(pkg) || YTM.equals(pkg) || "com.google.android.youtube".equals(pkg)
         || "com.google.android.apps.youtube.music".equals(pkg); }
@@ -71,6 +73,7 @@ public class BgPlayer extends Service {
     /** Pick up only when YouTube stopped because you went Home (not a pause you pressed earlier). */
     static void maybe(Context c) {
         if (!enabled(c) || stoppedAt == 0 || homeAt == 0 || running != null) return;
+        if (System.currentTimeMillis() < suppressUntil) { stoppedAt = 0; return; }
         long d = stoppedAt - homeAt;
         if (d < -2500 || d > 4000) return;
         if (!Settings.canDrawOverlays(c)) return;

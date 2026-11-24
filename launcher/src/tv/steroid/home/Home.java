@@ -748,6 +748,7 @@ public class Home extends Activity {
             for (int k = 0; k < hist.length(); k++) {
                 org.json.JSONObject e = hist.getJSONObject(k);
                 if (System.currentTimeMillis() - e.optLong("at") > 3 * 86400000L) break; // only recent listening
+                if (e.optLong("at") <= Prefs.sp(this).getLong("resumeClearedAt", 0)) break;  // cleared with Close all
                 String pkg = e.optString("pkg");
                 if (!MEDIA_APPS.contains(pkg)) continue;
                 idleGo = Intent.parseUri(e.optString("intent"), Intent.URI_INTENT_SCHEME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -1204,6 +1205,7 @@ public class Home extends Activity {
         ambient.reload();
         loadAvatar();
         nowPlaying.start();
+        fillIdle(); // Close all in Recent apps also clears the Resume card
         if (stats != null) stats.start();
         if (appsDirty) rebuildApps();
         else for (Shelf sh : shelves) sh.refresh(); // video rows follow what you just watched

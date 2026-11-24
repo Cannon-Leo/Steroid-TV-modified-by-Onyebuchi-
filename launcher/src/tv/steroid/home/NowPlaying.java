@@ -187,6 +187,7 @@ class NowPlaying extends FrameLayout {
         if (ctl == null) return;
         MediaController m = ctl;
         String pkg = m.getPackageName();
+        BgPlayer.suppressUntil = System.currentTimeMillis() + 15000; // closed on purpose: don't carry it on
         key(KeyEvent.KEYCODE_MEDIA_PAUSE);
         try { m.getTransportControls().stop(); } catch (Exception ignored) {}
         dismissedKey = sessionKey(m);
@@ -235,6 +236,8 @@ class NowPlaying extends FrameLayout {
             if (s == null) continue;
             boolean playing = s.getState() == PlaybackState.STATE_PLAYING;
             if (playing && sessionKey(m).equals(dismissedKey)) dismissedKey = null; // you pressed play again
+            if (playing) Clear.dismissed.remove(sessionKey(m));
+            else if (Clear.dismissed.contains(sessionKey(m))) continue;           // closed with Close all
             if (best == null || playing) best = m;
             if (playing) break;
         }
@@ -249,7 +252,8 @@ class NowPlaying extends FrameLayout {
         int st = s == null ? PlaybackState.STATE_NONE : s.getState();
         if (ctl != null && st == PlaybackState.STATE_PLAYING && sessionKey(ctl).equals(dismissedKey)) dismissedKey = null;
         boolean alive = ctl != null && st != PlaybackState.STATE_NONE && st != PlaybackState.STATE_ERROR
-            && !sessionKey(ctl).equals(dismissedKey);
+            && st != PlaybackState.STATE_STOPPED
+            && !sessionKey(ctl).equals(dismissedKey) && (st == PlaybackState.STATE_PLAYING || !Clear.dismissed.contains(sessionKey(ctl)));
         setActive(alive);
         if (!alive) return;
         boolean playing = st == PlaybackState.STATE_PLAYING || st == PlaybackState.STATE_BUFFERING;

@@ -21,7 +21,8 @@ if mode == "on":
 if entries: hooks["PermissionRequest"] = entries
 else: hooks.pop("PermissionRequest", None)
 if not hooks: s.pop("hooks", None)
-if os.path.exists(path): os.replace(path, path + ".before-little-office")
+import shutil
+if os.path.exists(path): shutil.copy(path, path + ".before-little-office")
 json.dump(s, open(path, "w"), indent=2)
 print("TV approvals", "ON" if mode == "on" else "OFF", "for Claude Code (backup: settings.json.before-little-office)")
 P

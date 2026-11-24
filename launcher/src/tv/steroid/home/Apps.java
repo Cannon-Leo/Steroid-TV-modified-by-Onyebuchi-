@@ -220,20 +220,86 @@ final class Apps {
     static void menu(Activity ctx, App a, String[] extra, Runnable[] extraDo, Runnable changed) {
         List<String> labels = new ArrayList<>(Arrays.asList(extra));
         List<Runnable> acts = new ArrayList<>(Arrays.asList(extraDo));
+        List<Integer> icons = new ArrayList<>();
+        for (String l : extra) icons.add(l.startsWith("Move left") ? Icon.PREV : l.startsWith("Move right") ? Icon.NEXT
+            : l.startsWith("Close") ? Icon.CLOSE : Icon.CLOSE);
         List<String> watch = Prefs.listOrEmpty(ctx, "watch"), mine = Prefs.listOrEmpty(ctx, "mine");
-        if (!watch.contains(a.pkg)) { labels.add("Pin to Watch"); acts.add(() -> { watch.add(a.pkg); Prefs.list(ctx, "watch", watch); changed.run(); }); }
-        if (!mine.contains(a.pkg)) { labels.add("Add to My apps"); acts.add(() -> { mine.add(a.pkg); Prefs.list(ctx, "mine", mine); changed.run(); }); }
-        labels.add("Hide from All apps");
+        if (!watch.contains(a.pkg)) { labels.add("Pin to Watch"); icons.add(Icon.PLUS); acts.add(() -> { watch.add(a.pkg); Prefs.list(ctx, "watch", watch); changed.run(); }); }
+        if (!mine.contains(a.pkg)) { labels.add("Add to My apps"); icons.add(Icon.PLUS); acts.add(() -> { mine.add(a.pkg); Prefs.list(ctx, "mine", mine); changed.run(); }); }
+        labels.add("Hide from All apps"); icons.add(Icon.EYE_OFF);
         acts.add(() -> { List<String> h = Prefs.listOrEmpty(ctx, "hidden"); h.add(a.pkg); Prefs.list(ctx, "hidden", h); changed.run(); });
-        labels.add("Arrange home screen");
-        acts.add(() -> ctx.startActivity(new Intent(ctx, Personal.class).putExtra("arrange", true)));
-        labels.add("App info");
+        labels.add("App info"); icons.add(Icon.GEAR);
         acts.add(() -> ctx.startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + a.pkg))));
-        labels.add("Uninstall");
-        acts.add(() -> ctx.startActivity(new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + a.pkg))));
-        new AlertDialog.Builder(ctx, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-            .setTitle(a.label)
-            .setItems(labels.toArray(new String[0]), (d, i) -> acts.get(i).run())
-            .show();
+        boolean system = false;
+        try { system = (ctx.getPackageManager().getApplicationInfo(a.pkg, 0).flags & android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0; }
+        catch (Exception ignored) {}
+        if (!system) { // built in apps can't be removed: App info has Disable for those
+            labels.add("Uninstall"); icons.add(Icon.CLOSE);
+            acts.add(() -> ctx.startActivity(new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + a.pkg))));
+        }
+        popup(ctx, ctx.getCurrentFocus(), a, labels, icons, acts);
+    }
+
+    /**
+     * The small pop up beside an app, like the stock launcher's: the app's name on top, then its
+     * options. Up and down move, OK chooses, Back closes. It floats right of the app (or left, near the edge).
+     */
+    static void popup(Activity ctx, View anchor, App a, List<String> labels, List<Integer> icons, List<Runnable> acts) {
+        LinearLayout box = new LinearLayout(ctx);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(Ui.px(8), Ui.px(12), Ui.px(8), Ui.px(8));
+        GradientDrawable bg = Ui.round(0xF2181820, 20);
+        bg.setStroke(Ui.px(1), 0x2EFFFFFF);
+        box.setBackground(bg);
+        box.setElevation(Ui.px(16));
+        TextView title = Ui.text(ctx, Ui.sansMedium, 15, 0xB3FFFFFF);
+        title.setText(a.label);
+        title.setSingleLine(true);
+        title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        title.setPadding(Ui.px(14), 0, Ui.px(14), Ui.px(8));
+        box.addView(title);
+        android.widget.PopupWindow pw = new android.widget.PopupWindow(box, Ui.px(270), -2, true);
+        pw.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0));
+        pw.setAnimationStyle(android.R.style.Animation_Dialog);
+        View first = null;
+        for (int i = 0; i < labels.size(); i++) {
+            final Runnable act = acts.get(i);
+            boolean danger = labels.get(i).equals("Uninstall");
+            LinearLayout r = new LinearLayout(ctx);
+            r.setGravity(Gravity.CENTER_VERTICAL);
+            r.setFocusable(true);
+            r.setPadding(Ui.px(14), 0, Ui.px(14), 0);
+            GradientDrawable rb = Ui.round(0x00FFFFFF, 14);
+            r.setBackground(rb);
+            Icon ic = new Icon(ctx, icons.get(i));
+            ic.color(danger ? 0xFFFF6B5A : 0xE6FFFFFF);
+            r.addView(ic, new LinearLayout.LayoutParams(Ui.px(18), Ui.px(18)));
+            TextView t = Ui.text(ctx, Ui.sans, 16, danger ? 0xFFFF8A7E : 0xFFFFFFFF);
+            t.setText(labels.get(i));
+            t.setSingleLine(true);
+            t.setPadding(Ui.px(14), 0, 0, 0);
+            r.addView(t, new LinearLayout.LayoutParams(0, -2, 1));
+            r.setOnFocusChangeListener((v, f) -> {           // the popup is its own window: it draws its own focus
+                rb.setColor(f ? (danger ? 0x33FF6B5A : 0x29FFFFFF) : 0x00FFFFFF);
+                rb.setStroke(f ? Ui.px(2) : 0, 0xFFFFFFFF);
+            });
+            r.setOnClickListener(v -> { pw.dismiss(); act.run(); });
+            box.addView(r, new LinearLayout.LayoutParams(-1, Ui.px(46)));
+            if (first == null) first = r;
+        }
+        if (anchor == null) { pw.showAtLocation(ctx.getWindow().getDecorView(), Gravity.CENTER, 0, 0); }
+        else {
+            int[] at = new int[2];
+            anchor.getLocationOnScreen(at);
+            int sw = ctx.getResources().getDisplayMetrics().widthPixels, sh = ctx.getResources().getDisplayMetrics().heightPixels;
+            box.measure(View.MeasureSpec.makeMeasureSpec(Ui.px(270), View.MeasureSpec.EXACTLY), View.MeasureSpec.UNSPECIFIED);
+            int w = Ui.px(270), hgt = box.getMeasuredHeight();
+            int x = at[0] + (int) (anchor.getWidth() * anchor.getScaleX()) + Ui.px(14);
+            if (x + w > sw - Ui.px(16)) x = at[0] - w - Ui.px(14);           // no room on the right: open on the left
+            int y = Math.max(Ui.px(16), Math.min(sh - hgt - Ui.px(16), at[1]));
+            pw.showAtLocation(ctx.getWindow().getDecorView(), Gravity.TOP | Gravity.START, Math.max(Ui.px(16), x), y);
+        }
+        View f0 = first;
+        if (f0 != null) f0.post(f0::requestFocus);
     }
 }

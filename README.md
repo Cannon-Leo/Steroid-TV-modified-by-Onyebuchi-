@@ -75,9 +75,14 @@ centre, or the compass in Little Office.
 - A redesigned settings page (grouped cards, Lucide icons, real switches): your name, photo slideshow,
   slow zoom, how often photos change, **Arrange home** (move sections, sizes S / M / L, show or hide), and
   hidden apps, and header options (clock, seconds, date, year, greeting, system card, glass or solid).
-- **Control centre** (the gear): round toggles that light up when on (Wi‑Fi, Bluetooth, Mute,
-  Screensaver; hold OK for their settings), a tall volume slider (up and down), shortcuts (Display,
-  Recents, Apps, Date & time), then launcher and system options. It scrolls, and glass or solid is one switch.
+- **Control Centre** (the gear), laid out like iOS and HyperOS: a grid of rounded modules on frosted glass.
+  The connectivity module (Wi‑Fi, Bluetooth, Mute, Screensaver as round toggles that light up when on;
+  hold OK for their settings) sits beside a now playing module (art, title, previous, play, next); then a
+  tall volume slider (up and down, OK mutes) beside square shortcuts (Display, Recents, Inputs, Apps,
+  Date & time, Settings), then Launcher, Glass (white when on), Tour and Privacy.
+- **Recent apps → Close all** closes everything: every player is stopped (including the background YouTube
+  player and the radio), apps are freed from memory, the Resume card and the music widget clear, and the
+  list starts empty; only apps you open afterwards appear again.
 
 ### Features of the original, extended
 - **Retro TV:** added the **'60s** and **'70s** next to the '80s to '10s; the '00s and '10s start faster
@@ -209,12 +214,28 @@ list in `~/.gemini/antigravity/conversation_summaries.db`. Claude sessions that 
 Claude app) leave nothing on the computer, so the card says the app is open but cannot show their status.
 Run Claude Code in a terminal to get full status.
 
+### Claude Code notices on the TV
+
+When Claude Code (on the computer) needs you or finishes, a small notice slides in from the right side of
+the TV over whatever you're watching, then slides back by itself after a few seconds. OK opens Little
+Office. `little-office/install.sh` turns this on (Notification and Stop hooks in `~/.claude/settings.json`);
+`little-office/notify.sh off` turns it off. Only the project name and one sentence are sent.
+
 ### Keep YouTube playing
 
 Press Home while YouTube or YouTube Music plays: the same track carries on from the same second in the
 music widget, then continues with YouTube's mix of similar tracks. Play, pause, next, previous and close
 work from the widget; Open goes back into the app at the current track. Turn it off in Launcher settings
 (**Keep YouTube playing**).
+
+### Claude Code notices on the TV
+
+`little-office/install.sh` also runs `little-office/notify.sh on`, which adds Claude Code **Notification**
+and **Stop** hooks (with a backup of `~/.claude/settings.json`). The moment Claude needs you or finishes,
+a notice slides in from the right edge of the TV (project, state, one sentence), a thin line shows the time
+left, and it slides back by itself after 8 seconds. OK opens Little Office; any other key closes it.
+`notify.sh off` removes the hooks. This works for Claude Code running on the computer (terminal, the
+desktop app or an editor); sessions that run in the cloud leave nothing on the computer to report.
 
 ### Approve Claude Code requests from the TV
 

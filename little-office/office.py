@@ -39,6 +39,7 @@ TOOL_QUIET = 20 * 60       # ...unless it's waiting on a long-running tool
 MAX_EVENTS = 50
 
 events = []                # [{"id","at","agent","project","kind","text"}]
+hooked = {}                # (agent, project) -> time a hook reported it (the file watcher then stays quiet)
 last_state = {}            # session key -> state
 lock = threading.Lock()
 
@@ -395,7 +396,8 @@ def snapshot():
     with lock:
         for s in sessions:
             prev = last_state.get(s["key"])
-            if prev is not None and prev != s["state"] and s["state"] in ("needs_you", "finished"):
+            if (prev is not None and prev != s["state"] and s["state"] in ("needs_you", "finished")
+                    and now - hooked.get((s["agent"], s["project"]), 0) > 120):
                 events.append({"id": int(now * 1000) + len(events), "at": now, "agent": s["agent"],
                                "project": s["project"], "kind": s["state"],
                                "text": s["text"] or ("Needs your input" if s["state"] == "needs_you" else "Finished")})
@@ -407,6 +409,31 @@ def snapshot():
         s.pop("key", None)
     return {"generated_at": now, "pinned": cfg.get("pinned", []), "sessions": sessions, "events": evs,
             "agents": agents(now), "computer": COMPUTER, "approvals": approvals.count()}
+
+
+_cache = {"at": 0, "data": None}
+
+
+def cached_snapshot():
+    """The TV asks every few seconds; reading the logs at most every 3 s keeps that cheap."""
+    if time.time() - _cache["at"] > 3 or _cache["data"] is None:
+        _cache["data"] = snapshot()
+        _cache["at"] = time.time()
+    return _cache["data"]
+
+
+def add_notice(b):
+    """A hook (Claude Code) says the agent needs you or finished: a notice for the TV right away."""
+    project = project_name(b["cwd"], config().get("names", {}))
+    now = time.time()
+    with lock:
+        hooked[(b["agent"], project)] = now
+        events.append({"id": int(now * 1000) + len(events), "at": now, "agent": b["agent"], "project": project,
+                       "kind": b["kind"], "text": " ".join(b["text"].split())[:140] or
+                       ("Needs your input" if b["kind"] == "needs_you" else "Finished")})
+        del events[:-MAX_EVENTS]
+    _cache["at"] = 0  # the next /status carries it
+    return 200, {"ok": True}
 
 
 def watcher():
@@ -505,7 +532,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(200, {"requests": approvals.listing()})
         if path != "/status":
             return self.reply(404, {"error": "not found"})
-        self.reply(200, snapshot())
+        self.reply(200, cached_snapshot())
 
     def do_POST(self):
         ip, local, private = self.where()
@@ -534,6 +561,13 @@ class Handler(BaseHTTPRequestHandler):
             if not ok:
                 return self.reply(400, {"error": "bad request"})
             return self.reply(*approvals.new_request(b, project_name(b["cwd"], config().get("names", {}))))
+        if local and path == "/notify" and (self.headers.get("Host") or "").lower() in LOCAL_HOSTS:
+            ok, b = schema.NOTIFY.safe_parse(body)
+            if not ok:
+                return self.reply(400, {"error": "bad request"})
+            if not guard.allow(ip, "notify", 60, 60):
+                return self.reply(429, {"error": "slow down"})
+            return self.reply(*add_notice(b))
         if hook and path.endswith("/cancel"):
             return self.reply(*approvals.cancel(path.split("/")[2]))
         if path == "/pair/start":
