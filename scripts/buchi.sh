@@ -116,12 +116,18 @@ c["photos_folder"], c["name"] = sys.argv[1], sys.argv[2].strip()
 json.dump(c, open(p, "w"), indent=2)
 P
     echo "$n photos ready for the TV (it fetches them from Little Office within a minute, and every 10 minutes)"
-    # also copy them straight over adb, for a TV that isn't paired yet
-    [ -f personal/name ] && tv push personal/name /sdcard/Android/data/tv.steroid.home/files/photos/name.txt >/dev/null 2>&1
-    tv shell rm -f "/sdcard/Android/data/tv.steroid.home/files/photos/*.jpg" "/sdcard/Android/data/tv.steroid.home/files/photos/*.png" >/dev/null 2>&1 || true
-    "$0" photos "$L" ;;
+    # also copy them straight over adb, for a TV that isn't paired yet (skipped, not fatal, if adb can't reach it)
+    if tv get-state >/dev/null 2>&1; then
+      [ -f personal/name ] && { tv push personal/name /sdcard/Android/data/tv.steroid.home/files/photos/name.txt >/dev/null 2>&1 || true; }
+      tv shell rm -f "/sdcard/Android/data/tv.steroid.home/files/photos/*.jpg" "/sdcard/Android/data/tv.steroid.home/files/photos/*.png" >/dev/null 2>&1 || true
+      "$0" photos "$L" || echo "Copying over adb stopped; the TV still gets the photos from Little Office."
+    else
+      echo "The TV isn't reachable over adb right now: it gets the photos from Little Office instead (press Home on the TV)."
+      echo "To reconnect adb: scripts/connect.sh <TV address>"
+    fi ;;
   office) shift; scripts/office-check.sh "$@" ;;  # Little Office end to end: buchi.sh office [approve]
   screensaver)  # use the Steroid photos screensaver (your photos, full colour, small clock) instead of Backdrop
+    tv get-state >/dev/null 2>&1 || { echo "The TV isn't reachable over adb. Reconnect: scripts/connect.sh <TV address>"; echo "Or on the TV: Settings > Device Preferences > Screen saver > Steroid photos"; exit 1; }
     tv shell settings put secure screensaver_components tv.steroid.home/.PhotoDream && echo "Screensaver: Steroid photos" ;;  # Little Office end to end: buchi.sh office [approve]
   all)  # everything in one go: depth tool, build and install, Little Office, your photos, screensaver
     echo "== 1/5  Cut out tool for the depth effect"
