@@ -280,6 +280,18 @@ public class Home extends Activity {
         sys.addView(iconButton(Icon.WIFI, "Wi-Fi", new Intent(Settings.ACTION_WIFI_SETTINGS)));
         sys.addView(iconButton(Icon.BLUETOOTH, "Bluetooth", new Intent(Settings.ACTION_BLUETOOTH_SETTINGS)));
         sys.addView(iconButton(Icon.SOUND, "Sound", new Intent(Settings.ACTION_SOUND_SETTINGS)));
+        // notification centre: every Little Office notice, and approvals you can still answer
+        View bell = iconButton(Icon.BELL, "Notifications", new Intent(this, OfficePanel.class));
+        bell.setOnClickListener(v -> NoticePanel.open(this, rootView, scroll));
+        bellDot = new View(this);
+        bellDot.setBackground(Ui.round(0xFFFF6B5A, 5));
+        FrameLayout.LayoutParams bdl = new FrameLayout.LayoutParams(Ui.px(10), Ui.px(10), Gravity.TOP | Gravity.END);
+        bdl.setMargins(0, Ui.px(10), Ui.px(10), 0);
+        ((FrameLayout) bell).addView(bellDot, bdl);
+        bellView = bell;
+        sys.addView(bell);
+        Notices.changed = this::updateBell;
+        updateBell();
         View gear = iconButton(Icon.GEAR, "Quick settings", new Intent(Settings.ACTION_SETTINGS));
         gear.setOnClickListener(v -> { quickFrom = v; QuickPanel.open(this, rootView, scroll); }); // quick panel first
         sys.addView(gear);
@@ -682,6 +694,9 @@ public class Home extends Activity {
     View swap, musicIdle;
     boolean showStats;
     QuickPanel quick;
+    NoticePanel notices;
+    long lastPhotoSync;
+    View bellView, bellDot;
     Tour tour;
     View tourIcons, tourWidgets, tourAvatar;
     final java.util.Map<String, View> sectionViews = new java.util.HashMap<>();
@@ -1035,8 +1050,11 @@ public class Home extends Activity {
             "Add my name", () -> startActivity(new Intent(this, Personal.class))));
         st.add(new Tour.Step(() -> timeRow, "Header", "Time, date and a greeting",
             "Choose what shows here (seconds, year, greeting) in Quick settings, then Launcher settings."));
-        st.add(new Tour.Step(() -> tourIcons, "Top icons", "Voice, inputs and Quick settings",
-            "The mic asks Google Assistant. Then Recent apps, your HDMI inputs, Wi‑Fi, Bluetooth and Sound. The gear opens Quick settings.",
+        st.add(new Tour.Step(() -> bellView, "Notifications", "Everything you missed",
+            "The bell keeps every Little Office notice, with a dot when there's something new. Requests waiting for approval sit at the top: approve or reject them right there. Hold OK on a notice to clear it, or Clear all.",
+            "Open notifications", () -> NoticePanel.open(this, rootView, scroll)));
+        st.add(new Tour.Step(() -> tourIcons, "Top icons", "Voice, inputs and the Control centre",
+            "The mic asks Google Assistant. Then Recent apps, your HDMI inputs, Wi‑Fi, Bluetooth, Sound and the bell. The gear opens the Control centre.",
             "Open Quick settings", () -> { quickFrom = null; QuickPanel.open(this, rootView, scroll); }));
         st.add(new Tour.Step(() -> tourWidgets, "Widgets", "Music and system at a glance",
             "While something plays, the player shows here: OK plays or pauses, left and right reach previous, next and close. Press Home while YouTube or YouTube Music plays and it keeps playing here. The swap button flips to RAM, storage, CPU and network."));
@@ -1315,6 +1333,11 @@ public class Home extends Activity {
         loadAvatar();
         nowPlaying.start();
         fillIdle(); // Close all in Recent apps also clears the Resume card
+        updateBell();
+        if (System.currentTimeMillis() - lastPhotoSync > 30_000) { // your photos and avatar from Little Office
+            lastPhotoSync = System.currentTimeMillis();
+            new Thread(() -> { if (Office.addr.isEmpty()) Office.poll(this); Photos.sync(this); }).start();
+        }
         h.removeCallbacks(pipPoll);
         h.postDelayed(pipPoll, 800); // an app left floating in a mini player?
         if (stats != null) stats.start();
@@ -1357,7 +1380,13 @@ public class Home extends Activity {
         if (breathe != null) breathe.pause();
     }
 
-    @Override public void onBackPressed() { if (quick != null) quick.close(); /* otherwise home stays home */ }
+    @Override public void onBackPressed() {
+        if (notices != null) notices.close();
+        else if (quick != null) quick.close(); /* otherwise home stays home */
+    }
+
+    /** A dot on the bell while there are notices you haven't seen. */
+    void updateBell() { if (bellDot != null) bellDot.setVisibility(Notices.unread(this) > 0 ? View.VISIBLE : View.GONE); }
 
     /** Pressing Home on the remote always lands at the top, on the first app. */
     @Override protected void onNewIntent(Intent intent) {

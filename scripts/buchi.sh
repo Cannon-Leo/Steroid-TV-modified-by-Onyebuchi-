@@ -83,6 +83,11 @@ case "$1" in
       echo "$SKIP" | grep -qxF "$b" && { echo "skipped $b"; continue; }
       cp "$f" "$L/" && n=$((n+1))
     done
+    if [ "$n" = 0 ]; then
+      echo "No photos copied. If the folder isn't empty, macOS is blocking Terminal from it:"
+      echo "System Settings > Privacy & Security > Files and Folders > Terminal > turn on Downloads Folder, then run this again."
+      exit 1
+    fi
     "$PY" - "$L" "$(cat personal/name 2>/dev/null)" <<'P'
 import json, os, sys
 p = os.path.expanduser("~/.little-office/config.json")

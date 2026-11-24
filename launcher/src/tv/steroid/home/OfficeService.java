@@ -82,6 +82,7 @@ public class OfficeService extends Service {
             if (e.id > seen) {
                 if (pending.isEmpty()) pendingSince = System.currentTimeMillis();
                 pending.add(e);
+                Notices.add(this, e); // kept for the notification centre, even if the pop up is missed
             }
             max = Math.max(max, e.id);
         }

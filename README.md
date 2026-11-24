@@ -81,6 +81,9 @@ centre, or the compass in Little Office.
   settings), round toggles that turn light when on (Screensaver, Mute, Glass, Mini player) and buttons
   (Launcher settings, Apps, Date and time, Privacy), and a Tour pill. Round buttons have no labels, as on
   HyperOS: the line under the date names whatever is selected. Hold OK on a toggle for its settings.
+- **Notification centre** (the bell at the top, with a dot when something is new): every Little Office
+  notice you may have missed, newest first; requests waiting for approval at the top with Approve and
+  Reject right there; OK opens Little Office, hold OK clears one, **Clear all** clears them all.
 - **Mini player rescue:** when any app is left floating in a mini player (picture in picture), a bar at
   the top of the home screen says so, with **Full screen** (already selected: one OK) and **Close**. The
   Control centre has a **Mini player** button too, and pressing **Home** while you're already on the home
