@@ -6,6 +6,7 @@
 #   clean    debloat (writes backup/restore.sh first)
 #   tune     faster animations, ad id off, offline photo screensaver
 #   photos <folder>   push your photos (and profile.jpg) to the stick
+#   myphotos          the same, from the private folder named in personal/photos-folder
 #   update   build + install + Little Office + diagnostics, in one go
 #   pip [full|close]   mini player stuck on screen? bring it back to full screen or close it
 #   undo     put everything back
@@ -66,6 +67,10 @@ case "$1" in
       case "$(echo "$f" | tr "A-Z" "a-z")" in *.jpg|*.jpeg|*.png|*.webp) tv push "$f" "$D/" >/dev/null && echo "sent $(basename "$f")";; esac
     done
     tv shell input keyevent KEYCODE_HOME; echo "Photos are in the slideshow." ;;
+  myphotos)  # your own photos and profile picture, from the folder named in personal/photos-folder (never committed)
+    F="$(cat personal/photos-folder 2>/dev/null)"
+    [ -d "$F" ] || { echo "Put your photo folder's path in personal/photos-folder first."; exit 1; }
+    "$0" photos "$F" ;;
   update)  # the whole fix in one go: build, install on the TV, refresh Little Office, then check the TV
     scripts/build.sh && "$0" install && little-office/install.sh && scripts/diag.sh ;;
   pip) shift; scripts/pip.sh "$@" ;;   # mini player stuck? buchi.sh pip full / pip close

@@ -283,6 +283,11 @@ Codex and Antigravity have no permission hook, so they can only notify the TV, n
 
 ## Your photos and profile picture
 
+Private photos stay off GitHub: put your folder's path in `personal/photos-folder` (ignored by git, like
+every image outside the app's own resources) and run `scripts/buchi.sh myphotos`. A `profile.jpg` (or .png)
+in that folder becomes your avatar. The slideshow also mixes in 34 free landscape photos the TV downloads
+by itself (Unsplash licence, via Lorem Picsum); turn them off in Launcher settings, Background.
+
 Put your photos (jpg, png or webp) in one folder, plus a square photo named **`profile.jpg`** for the
 picture next to the greeting, then:
 

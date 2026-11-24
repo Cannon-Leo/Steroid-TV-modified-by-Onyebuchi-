@@ -14,3 +14,14 @@ devtmp/
 _to_delete/
 __pycache__/
 *.pyc
+
+# personal: your own photos and anything about you stay on this computer, never on GitHub
+personal/
+photos/
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.heic
+!launcher/res/**
+!docs/**

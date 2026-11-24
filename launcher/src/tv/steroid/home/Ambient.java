@@ -30,6 +30,54 @@ class Ambient extends View {
 
     // slideshow
     static final String OWN = "photos"; // getExternalFilesDir("photos"), filled from the Mac with adb push
+    static final String FREE = "free";  // free to use photos the TV downloads by itself (see fetchFree)
+
+    /**
+     * Free to use landscape photos from Unsplash photographers (Unsplash licence: free for any use,
+     * no permission or credit needed), served at TV size by Lorem Picsum. Downloaded once, one at a
+     * time, on a background thread; ones that fail are simply skipped and tried again another day.
+     */
+    static final int[] FREE_IDS = {10, 11, 15, 16, 17, 18, 28, 29, 37, 41, 42, 43, 49, 54, 57, 58, 76, 84, 101, 110,
+        116, 120, 122, 124, 128, 129, 142, 152, 167, 184, 188, 191, 200, 214};
+    static volatile boolean fetching;
+
+    static void fetchFree(Context c) {
+        if (fetching) return;
+        File dir = c.getExternalFilesDir(FREE);
+        if (dir == null) return;
+        long lastTry = Prefs.sp(c).getLong("freeTried", 0);
+        int have = 0;
+        for (int id : FREE_IDS) if (new File(dir, "u" + id + ".jpg").exists()) have++;
+        if (have == FREE_IDS.length || System.currentTimeMillis() - lastTry < 6 * 3600_000L && have > 0) return;
+        Prefs.sp(c).edit().putLong("freeTried", System.currentTimeMillis()).apply();
+        fetching = true;
+        new Thread(() -> {
+            try {
+                for (int id : FREE_IDS) {
+                    File out = new File(dir, "u" + id + ".jpg"), tmp = new File(dir, "u" + id + ".part");
+                    if (out.exists()) continue;
+                    java.net.HttpURLConnection conn = null;
+                    try {
+                        conn = (java.net.HttpURLConnection) new java.net.URL("https://picsum.photos/id/" + id + "/1920/1080.jpg").openConnection();
+                        conn.setConnectTimeout(8000);
+                        conn.setReadTimeout(15000);
+                        conn.setInstanceFollowRedirects(true);
+                        if (conn.getResponseCode() != 200) continue;
+                        try (java.io.InputStream in = conn.getInputStream(); java.io.FileOutputStream fo = new java.io.FileOutputStream(tmp)) {
+                            byte[] b = new byte[32768];
+                            long total = 0;
+                            for (int n; (n = in.read(b)) > 0; ) { fo.write(b, 0, n); total += n; if (total > 4_000_000) throw new java.io.IOException("too big"); }
+                        }
+                        if (tmp.length() > 20_000) tmp.renameTo(out); else tmp.delete();
+                    } catch (Exception e) {
+                        tmp.delete();
+                    } finally {
+                        if (conn != null) conn.disconnect();
+                    }
+                }
+            } finally { fetching = false; }
+        }).start();
+    }
     final List<String> sources = new ArrayList<>();
     final ExecutorService io = Executors.newSingleThreadExecutor();
     final Handler h = new Handler(Looper.getMainLooper());
@@ -73,6 +121,13 @@ class Ambient extends View {
                 if (n.startsWith("profile.")) continue;
                 if (n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".png") || n.endsWith(".webp")) l.add(f.getAbsolutePath());
             }
+            // free landscape photos (Unsplash licence, via Lorem Picsum), fetched once in the background
+            if (Prefs.on(getContext(), "freePhotos", true)) {
+                File free = getContext().getExternalFilesDir(FREE);
+                File[] ff = free == null ? null : free.listFiles();
+                if (ff != null) for (File f : ff) if (f.getName().endsWith(".jpg")) l.add(f.getAbsolutePath());
+                fetchFree(getContext());
+            }
             try {
                 String[] a = getContext().getAssets().list("windows");
                 if (a != null) for (String s : a) if (s.endsWith(".jpg")) l.add("asset:windows/" + s);
@@ -85,7 +140,7 @@ class Ambient extends View {
         wanted = want;
         // your own photos come first in each loop so new ones show up straight away
         List<String> own = new ArrayList<>(), rest = new ArrayList<>();
-        for (String s : l) (s.startsWith("asset:") ? rest : own).add(s);
+        for (String s : l) (s.startsWith("asset:") || s.contains("/" + FREE + "/") ? rest : own).add(s);
         Collections.shuffle(own);
         Collections.shuffle(rest);
         sources.clear(); sources.addAll(own); sources.addAll(rest);
