@@ -83,6 +83,7 @@ public class Home extends Activity {
         scroll.addView(col, new FrameLayout.LayoutParams(-1, -2));
         root.addView(scroll, new FrameLayout.LayoutParams(-1, -1));
 
+        col.addView(pipBar(), new LinearLayout.LayoutParams(-1, -2)); // shows only while an app sits in a mini player
         col.addView(header());
 
         // Sections, in the order and size chosen in "Arrange home screen"
@@ -1030,6 +1031,84 @@ public class Home extends Activity {
         tour = Tour.start(this, rootView, selector, scroll, st, () -> { tour = null; Prefs.put(this, "tourDone", true); });
     }
 
+    // ---------- Mini player rescue ----------
+    LinearLayout pipBar;
+    TextView pipText;
+    View pipFull;
+    String pipPkg;
+
+    /** A bar at the top when some app is floating in a mini player: Full screen or Close, for any app. */
+    View pipBar() {
+        pipBar = new LinearLayout(this);
+        pipBar.setGravity(Gravity.CENTER_VERTICAL);
+        pipBar.setPadding(Ui.px(18), Ui.px(10), Ui.px(10), Ui.px(10));
+        pipBar.setClipChildren(false);
+        GradientDrawable bg = Ui.round(0xE6141418, 22);
+        bg.setStroke(Ui.px(1), 0x40FFFFFF);
+        pipBar.setBackground(bg);
+        pipBar.addView(new Icon(this, Icon.MONITOR), new LinearLayout.LayoutParams(Ui.px(22), Ui.px(22)));
+        pipText = Ui.text(this, Ui.sansMedium, 16, 0xFFFFFFFF);
+        pipText.setSingleLine(true);
+        pipText.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        pipText.setPadding(Ui.px(12), 0, Ui.px(12), 0);
+        pipBar.addView(pipText, new LinearLayout.LayoutParams(0, -2, 1));
+        pipFull = pipButton("Full screen", true, () -> {
+            String p = pipPkg;
+            if (p != null && !PipWatch.full(this, p)) Toast.makeText(this, "Couldn't reopen it. Run scripts/buchi.sh pip full on the Mac.", Toast.LENGTH_LONG).show();
+        });
+        pipBar.addView(pipFull, new LinearLayout.LayoutParams(-2, Ui.px(42)));
+        View close = pipButton("Close", false, () -> {
+            String p = pipPkg;
+            if (p == null) return;
+            PipWatch.close(this, p);
+            h.postDelayed(() -> { // still floating? open it full screen, where Back closes it normally
+                new Thread(() -> {
+                    String still = PipWatch.pinned(this);
+                    h.post(() -> {
+                        if (p.equals(still)) { PipWatch.full(this, p); Toast.makeText(this, "Press Back in the app to close it", Toast.LENGTH_LONG).show(); }
+                        else checkPip();
+                    });
+                }).start();
+            }, 1500);
+        });
+        LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(-2, Ui.px(42));
+        cl.leftMargin = Ui.px(10);
+        pipBar.addView(close, cl);
+        pipBar.setVisibility(View.GONE);
+        return pipBar;
+    }
+
+    TextView pipButton(String label, boolean primary, Runnable run) {
+        TextView b = Ui.text(this, Ui.sansMedium, 15, primary ? 0xFF0E0E12 : 0xFFFFFFFF);
+        b.setText(label);
+        b.setGravity(Gravity.CENTER);
+        b.setFocusable(true);
+        b.setPadding(Ui.px(20), 0, Ui.px(20), 0);
+        GradientDrawable g = Ui.round(primary ? 0xFFFFFFFF : 0x26FFFFFF, 21);
+        b.setBackground(g);
+        b.setOnFocusChangeListener((v, f) -> { if (!primary) g.setColor(f ? 0x40FFFFFF : 0x26FFFFFF); });
+        b.setOnClickListener(v -> run.run());
+        return b;
+    }
+
+    final Runnable pipPoll = new Runnable() { public void run() { checkPip(); h.postDelayed(this, 3000); } };
+
+    void checkPip() {
+        new Thread(() -> {
+            String p = PipWatch.pinned(this);
+            h.post(() -> {
+                boolean was = pipPkg != null;
+                pipPkg = p;
+                if (p == null) { pipBar.setVisibility(View.GONE); return; }
+                String label = p;
+                for (Apps.App a : installed) if (a.pkg.equals(p)) { label = a.label; break; }
+                pipText.setText(label + " is playing in a mini player");
+                pipBar.setVisibility(View.VISIBLE);
+                if (!was && tour == null && quick == null) { scroll.smoothScrollTo(0, 0); pipFull.requestFocus(); } // one press of OK brings it back
+            });
+        }).start();
+    }
+
     /** End of the home screen: replay the tour. */
     View tourCard() {
         LinearLayout c = new LinearLayout(this);
@@ -1206,6 +1285,8 @@ public class Home extends Activity {
         loadAvatar();
         nowPlaying.start();
         fillIdle(); // Close all in Recent apps also clears the Resume card
+        h.removeCallbacks(pipPoll);
+        h.postDelayed(pipPoll, 800); // an app left floating in a mini player?
         if (stats != null) stats.start();
         if (appsDirty) rebuildApps();
         else for (Shelf sh : shelves) sh.refresh(); // video rows follow what you just watched
@@ -1231,6 +1312,7 @@ public class Home extends Activity {
     @Override public void onWindowFocusChanged(boolean f) { super.onWindowFocusChanged(f); ambient.run(f); }
 
     @Override protected void onPause() {
+        h.removeCallbacks(pipPoll);
         super.onPause();
         resumed = false;
         h.removeCallbacks(officeTick);

@@ -7,6 +7,7 @@
 #   tune     faster animations, ad id off, offline photo screensaver
 #   photos <folder>   push your photos (and profile.jpg) to the stick
 #   update   build + install + Little Office + diagnostics, in one go
+#   pip [full|close]   mini player stuck on screen? bring it back to full screen or close it
 #   undo     put everything back
 . "$(dirname "$0")/env.sh"
 cd "$ROOT"
@@ -67,6 +68,7 @@ case "$1" in
     tv shell input keyevent KEYCODE_HOME; echo "Photos are in the slideshow." ;;
   update)  # the whole fix in one go: build, install on the TV, refresh Little Office, then check the TV
     scripts/build.sh && "$0" install && little-office/install.sh && scripts/diag.sh ;;
+  pip) shift; scripts/pip.sh "$@" ;;   # mini player stuck? buchi.sh pip full / pip close
   undo) backup/restore.sh ;;
   *) sed -n 2,10p "$0" ;;
 esac

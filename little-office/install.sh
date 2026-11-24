@@ -5,7 +5,7 @@
 set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
 D="$HOME/.little-office"; mkdir -p "$D"
-cp "$HERE/office.py" "$HERE/approvals.py" "$HERE/schema.py" "$HERE/approve_hook.py" "$HERE/notify_hook.py" "$D/"
+cp "$HERE/office.py" "$HERE/approvals.py" "$HERE/schema.py" "$HERE/approve_hook.py" "$HERE/notify_hook.py" "$HERE/hooks.py" "$D/"
 PY=/opt/homebrew/bin/python3; [ -x "$PY" ] || PY="$(command -v python3)"
 if [ $# -gt 0 ] || [ ! -f "$D/config.json" ]; then
   "$PY" - "$D/config.json" "$@" <<'P'
@@ -33,4 +33,4 @@ launchctl bootout "gui/$(id -u)/com.steroid.littleoffice" 2>/dev/null || true
 launchctl bootstrap "gui/$(id -u)" "$PL"
 sleep 2
 curl -sf -m 5 http://127.0.0.1:8765/status >/dev/null && echo "LITTLE OFFICE RUNNING on port 8765" || { echo "Service didn't answer — see $D/office.log"; exit 1; }
-"$HERE/notify.sh" on  # Claude Code notices on the TV (Notification and Stop hooks)
+"$PY" "$D/hooks.py" on  # Claude Code notices and TV approvals from this Mac (paired TVs only)

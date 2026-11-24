@@ -165,6 +165,19 @@ final class QuickPanel extends FrameLayout {
         });
         square(r3, true, Icon.COMPASS, "Tour", null, () -> { close(); home.h.postDelayed(home::startTour, 300); });
         square(r3, true, Icon.SHIELD, "Privacy", null, () -> open(new Intent(Settings.ACTION_PRIVACY_SETTINGS)));
+        // a mini player stuck on screen: back to full screen, for any app
+        LinearLayout r4 = new LinearLayout(c);
+        r4.setClipChildren(false);
+        LinearLayout.LayoutParams r4l = new LinearLayout.LayoutParams(-1, -2);
+        r4l.topMargin = Ui.px(G);
+        list.addView(r4, r4l);
+        square(r4, false, Icon.MONITOR, "Mini player", null, () -> new Thread(() -> {
+            String p = PipWatch.pinned(c);
+            h.post(() -> {
+                if (p == null) Toast.makeText(c, "No mini player on screen", Toast.LENGTH_SHORT).show();
+                else { close(); PipWatch.full(c, p); }
+            });
+        }).start());
 
         TextView tip = Ui.text(c, Ui.sans, 12, 0x8CFFFFFF);
         tip.setText("OK switches · hold OK for settings · on the volume, up and down");

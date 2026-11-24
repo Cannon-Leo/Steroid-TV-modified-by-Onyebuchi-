@@ -2,7 +2,9 @@
 # Run once in PowerShell AS ADMINISTRATOR (right click PowerShell, "Run as administrator"):
 #   Set-ExecutionPolicy -Scope Process Bypass; .\install-windows.ps1
 # Needs Python 3 from python.org (tick "Add python.exe to PATH" when installing).
-# Read only: it never changes your projects. Only devices on your home network can read the status.
+# Read only: it never changes your projects. It also adds Claude Code hooks (notices, and approvals
+# from paired TVs) to %USERPROFILE%\.claude\settings.json; undo with: python hooks.py off.
+# Only devices on your home network can read the status.
 
 $ErrorActionPreference = "Stop"
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -12,6 +14,8 @@ Copy-Item (Join-Path $here "office.py") (Join-Path $dir "office.py") -Force
 Copy-Item (Join-Path $here "approvals.py") (Join-Path $dir "approvals.py") -Force
 Copy-Item (Join-Path $here "schema.py") (Join-Path $dir "schema.py") -Force
 Copy-Item (Join-Path $here "approve_hook.py") (Join-Path $dir "approve_hook.py") -Force
+Copy-Item (Join-Path $here "notify_hook.py") (Join-Path $dir "notify_hook.py") -Force
+Copy-Item (Join-Path $here "hooks.py") (Join-Path $dir "hooks.py") -Force
 
 $py = (Get-Command python -ErrorAction SilentlyContinue).Source
 if (-not $py) { throw "Python 3 not found. Install it from python.org (tick 'Add python.exe to PATH'), then run this again." }
@@ -34,6 +38,9 @@ Unregister-ScheduledTask -TaskName "Little Office" -Confirm:$false -ErrorAction 
 Register-ScheduledTask -TaskName "Little Office" -Action $action -Trigger $trigger -Settings $settings -Description "Steroid TV: agent status for the TV" | Out-Null
 Start-ScheduledTask -TaskName "Little Office"
 Start-Sleep -Seconds 4
+
+Write-Host "Claude Code on this PC: notices and approvals to the TV..."
+& $py (Join-Path $dir "hooks.py") on
 
 try {
   Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 http://127.0.0.1:8765/status | Out-Null

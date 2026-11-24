@@ -80,6 +80,9 @@ centre, or the compass in Little Office.
   hold OK for their settings) sits beside a now playing module (art, title, previous, play, next); then a
   tall volume slider (up and down, OK mutes) beside square shortcuts (Display, Recents, Inputs, Apps,
   Date & time, Settings), then Launcher, Glass (white when on), Tour and Privacy.
+- **Mini player rescue:** when any app is left floating in a mini player (picture in picture), a bar at
+  the top of the home screen says so, with **Full screen** (already selected: one OK) and **Close**. The
+  Control centre has a **Mini player** button too. From the Mac: `scripts/buchi.sh pip full` or `pip close`.
 - **Recent apps → Close all** closes everything: every player is stopped (including the background YouTube
   player and the radio), apps are freed from memory, the Resume card and the music widget clear, and the
   list starts empty; only apps you open afterwards appear again.
@@ -216,10 +219,14 @@ Run Claude Code in a terminal to get full status.
 
 ### Claude Code notices on the TV
 
-When Claude Code (on the computer) needs you or finishes, a small notice slides in from the right side of
-the TV over whatever you're watching, then slides back by itself after a few seconds. OK opens Little
-Office. `little-office/install.sh` turns this on (Notification and Stop hooks in `~/.claude/settings.json`);
-`little-office/notify.sh off` turns it off. Only the project name and one sentence are sent.
+When Claude Code needs you or finishes, on **any** computer running Little Office (every Mac and Windows
+PC you installed it on), a small notice slides in from the right side of the TV over whatever you're
+watching, then slides back by itself after a few seconds. OK opens Little Office. Approval requests work
+the same way from every computer the TV is paired with (pair once per computer in Little Office).
+
+The installers turn both on (`little-office/install.sh` on a Mac, `install-windows.ps1` on Windows), using
+`little-office/hooks.py`, which works on Mac, Windows and Linux: `python3 hooks.py off` removes them,
+`hooks.py on notify` or `hooks.py on approve` turns on just one. Only the project name and one sentence are sent.
 
 ### Keep YouTube playing
 
