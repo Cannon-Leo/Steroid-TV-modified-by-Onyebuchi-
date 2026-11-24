@@ -73,7 +73,7 @@ case "$1" in
     tv shell am force-stop tv.steroid.home; sleep 1; tv shell input keyevent KEYCODE_HOME
     echo "Photos are in the slideshow (a profile.jpg or .png is your avatar)." ;;
   myphotos)  # your own photos and profile picture, from the folder named in personal/photos-folder (never committed)
-    F="$(cat personal/photos-folder 2>/dev/null)"
+    F="$(cat personal/photos-folder 2>/dev/null || true)"
     [ -d "$F" ] || { echo "Put your photo folder's path in personal/photos-folder first."; exit 1; }
     case "$F" in "$HOME"/Downloads*|"$HOME"/Desktop*|"$HOME"/Documents*)
       echo "Note: macOS can hold Terminal silently on $F until you allow it. If this seems stuck, press Ctrl+C,"
@@ -83,7 +83,7 @@ case "$1" in
     # a private copy Little Office can serve to paired TVs (macOS keeps background services out of Downloads);
     # photos named in personal/skip-photos (ones with words on them, say) are left out
     L="$HOME/.little-office/photos"; mkdir -p "$L"
-    SKIP="$(cat personal/skip-photos 2>/dev/null)"
+    SKIP="$(cat personal/skip-photos 2>/dev/null || true)"  # optional file
     # bring the copy up to date without wiping it: new or changed photos come in, removed ones go
     # (with their depth masks); unchanged photos keep their masks
     n=0; seen=" "
@@ -105,7 +105,7 @@ case "$1" in
       done
     fi
     # depth effect masks for the screensaver (needs rembg once: pip3 install "rembg[cpu]")
-    if "$PY" -c "import rembg" 2>/dev/null; then "$PY" little-office/depth.py "$L"
+    if "$PY" -c "import rembg" 2>/dev/null; then "$PY" little-office/depth.py "$L" || echo "Depth effect: the check stopped early (photos still go to the TV)"
     else echo "Depth effect: skipped (run once: pip3 install \"rembg[cpu]\", then myphotos again)"; fi
     "$PY" - "$L" "$(cat personal/name 2>/dev/null)" <<'P'
 import json, os, sys
@@ -118,7 +118,7 @@ P
     echo "$n photos ready for the TV (it fetches them from Little Office within a minute, and every 10 minutes)"
     # also copy them straight over adb, for a TV that isn't paired yet
     [ -f personal/name ] && tv push personal/name /sdcard/Android/data/tv.steroid.home/files/photos/name.txt >/dev/null 2>&1
-    tv shell rm -f "/sdcard/Android/data/tv.steroid.home/files/photos/*.jpg" "/sdcard/Android/data/tv.steroid.home/files/photos/*.png" >/dev/null 2>&1
+    tv shell rm -f "/sdcard/Android/data/tv.steroid.home/files/photos/*.jpg" "/sdcard/Android/data/tv.steroid.home/files/photos/*.png" >/dev/null 2>&1 || true
     "$0" photos "$L" ;;
   office) shift; scripts/office-check.sh "$@" ;;  # Little Office end to end: buchi.sh office [approve]
   screensaver)  # use the Steroid photos screensaver (your photos, full colour, small clock) instead of Backdrop
