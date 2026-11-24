@@ -74,7 +74,8 @@ case "$1" in
     echo "Photos are in the slideshow (a profile.jpg or .png is your avatar)." ;;
   myphotos)  # your own photos and profile picture, from the folder named in personal/photos-folder (never committed)
     F="$(cat personal/photos-folder 2>/dev/null || true)"
-    [ -d "$F" ] || { echo "Put your photo folder's path in personal/photos-folder first."; exit 1; }
+    [ -n "$F" ] || F="$ROOT/personal/photos"   # the default place for your photos
+    [ -d "$F" ] || { echo "No photos yet: make the folder personal/photos, put your photos (and profile.jpg) in it, then run this again."; exit 1; }
     case "$F" in "$HOME"/Downloads*|"$HOME"/Desktop*|"$HOME"/Documents*)
       echo "Note: macOS can hold Terminal silently on $F until you allow it. If this seems stuck, press Ctrl+C,"
       echo "move the photos to personal/photos in this folder and put that path in personal/photos-folder.";;
@@ -136,7 +137,7 @@ P
     echo "== 2/5  Build, install on the TV, Little Office, diagnostics"
     "$0" update || { echo "Stopped: the build or install failed (see above)."; exit 1; }
     echo "== 3/5  Your photos, avatar, name and depth masks"
-    "$0" myphotos
+    "$0" myphotos || echo "   (skipped: the slideshow uses the free photos until you add yours)"
     echo "== 4/5  Screensaver"
     "$0" screensaver
     echo "== 5/5  Tidy up and privacy guard"

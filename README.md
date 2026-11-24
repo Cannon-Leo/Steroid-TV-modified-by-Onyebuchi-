@@ -18,15 +18,14 @@ from an **Intel MacBook Pro** without Homebrew. Changes were made with Claude as
 
 1. [What I changed](#what-i-changed)
 2. [What stays from the original](#what-stays-from-the-original)
-3. [Requirements: Mac](#requirements-mac)
-4. [Requirements: Windows](#requirements-windows)
-5. [First setup](#first-setup)
-6. [Everyday commands](#everyday-commands)
-7. [Little Office on Mac and Windows](#little-office-on-mac-and-windows)
-8. [Your photos and profile picture](#your-photos-and-profile-picture)
-9. [Troubleshooting](#troubleshooting)
-10. [Honest limits](#honest-limits)
-11. [Licences and credits](#licences-and-credits)
+3. [What you need](#what-you-need)
+4. [Install, step by step](#install-step-by-step)
+5. [Everyday commands](#everyday-commands)
+6. [Little Office on Mac and Windows](#little-office-on-mac-and-windows)
+7. [Your photos and profile picture](#your-photos-and-profile-picture)
+8. [Troubleshooting](#troubleshooting)
+9. [Honest limits](#honest-limits)
+10. [Licences and credits](#licences-and-credits)
 
 ---
 
@@ -128,80 +127,96 @@ the debloat approach, `backup/restore.sh`, and the phase guides in [`docs/`](doc
 
 ---
 
-## Requirements: Mac
+## What you need
 
-Tested on an **Intel Mac without Homebrew**. Apple Silicon works the same way.
+- **A TV with Android TV 8 or newer** (Google TV and Mi TV Stick, Mi Box, Chromecast with Google TV,
+  Android TVs). Built and tested on a Xiaomi Mi TV Stick 4K.
+- **A Mac** (Intel or Apple Silicon) on the **same Wi‑Fi** as the TV. A Windows PC can run Little Office;
+  to build the launcher on Windows, use WSL (see the end of this section).
+- About **20 minutes** and **3 GB** of free space.
 
-| What | Why | How to get it |
-|---|---|---|
-| **Java JDK 17 or newer** (25 tested) | compiles the launcher | [adoptium.net](https://adoptium.net): Temurin, macOS, x64 (Intel) or aarch64 (Apple Silicon), `.pkg` |
-| **Android command line tools** | installs the SDK pieces below | developer.android.com: "Command line tools only", Mac zip |
-| **Android SDK: platform-tools, build-tools 36, platform 34** | adb, d8, aapt2, apksigner, android.jar | one command, below |
-| **python3** | scripts | comes with macOS (Xcode command line tools) |
-| curl, zip, unzip | scripts | built into macOS |
-| ffmpeg (optional) | smaller preview images | not required |
+## Install, step by step
 
-Install the SDK (adjust the zip name if yours differs):
+### 1. Put two tools on the Mac (once)
 
-```bash
-S=~/Library/Android/sdk
-rm -rf /tmp/ct; mkdir -p $S/cmdline-tools
-unzip -q ~/Downloads/commandlinetools-mac*.zip -d /tmp/ct && mv /tmp/ct/cmdline-tools $S/cmdline-tools/latest
-yes | $S/cmdline-tools/latest/bin/sdkmanager --sdk_root=$S "platform-tools" "build-tools;36.0.0" "platforms;android-34"
-```
+1. **Java**: go to [adoptium.net](https://adoptium.net), download **Temurin** for macOS (the `.pkg`) and
+   open it. Click through the installer.
+2. **Android tools**: go to [developer.android.com/studio](https://developer.android.com/studio#command-line-tools-only),
+   scroll to **Command line tools only** and download the **Mac** zip. Leave it in Downloads.
+3. Open **Terminal** (Spotlight, type Terminal) and paste this, then press Enter. It sets up the Android
+   pieces the build needs (it asks nothing; it takes a few minutes):
 
-## Requirements: Windows
+   ```bash
+   S=~/Library/Android/sdk; mkdir -p $S/cmdline-tools; rm -rf /tmp/ct
+   unzip -q ~/Downloads/commandlinetools-mac*.zip -d /tmp/ct && mv /tmp/ct/cmdline-tools $S/cmdline-tools/latest
+   yes | $S/cmdline-tools/latest/bin/sdkmanager --sdk_root=$S "platform-tools" "build-tools;36.0.0" "platforms;android-34"
+   ```
 
-**Little Office** runs natively on Windows. **Building and installing** the launcher uses the bash
-scripts, so on Windows run them inside **WSL 2** (Ubuntu), or use the Mac.
+Python is already on your Mac. Nothing else is needed.
 
-| What | Why | How to get it |
-|---|---|---|
-| **Python 3** | Little Office | [python.org](https://www.python.org/downloads/), tick **"Add python.exe to PATH"** |
-| **PowerShell 5+** | Little Office installer | built into Windows 10 and 11 |
-| **zeroconf** (Python package) | lets the TV find the PC | installed automatically by `install-windows.ps1` |
-| WSL 2 + Ubuntu *(only to build)* | runs the bash scripts | `wsl --install` in an admin PowerShell |
-| Java 17+, Android command line tools *(only to build)* | same as Mac | in Ubuntu: `sudo apt install openjdk-17-jdk unzip zip curl python3`, then the Linux command line tools and the same `sdkmanager` line with `--sdk_root=$HOME/Android/Sdk` |
+### 2. Let the Mac talk to the TV (once)
 
-Your Wi‑Fi network on Windows must be set to **Private** (Settings, Network, your Wi‑Fi, Private) so
-the TV can reach it.
+On the TV:
+1. **Settings → Device Preferences → About**, then press OK on **Build** seven times. It says you're a developer.
+2. Go back: **Device Preferences → Developer options**, turn on **USB debugging** (and **Network debugging**
+   if you see it).
+3. Write down the TV's **IP address**: **Device Preferences → About → Status**.
 
----
+### 3. Download this project and connect
 
-## First setup
-
-On the TV: Settings, Device Preferences, About, press **Build** 7 times. Then Developer options, turn on
-**USB debugging** (and **Network debugging** if listed). Note the TV's IP address (About, Status).
+In Terminal (put your TV's IP address in place of `192.168.1.50`):
 
 ```bash
+cd ~/Public
 git clone https://github.com/Cannon-Leo/Steroid-TV-modified-by-Onyebuchi-.git steroid
 cd steroid
-scripts/connect.sh <TV-IP>          # accept "Allow debugging" on the TV, tick Always allow
-scripts/buchi.sh check              # tools ready?
-scripts/buchi.sh build              # builds launcher/out/SteroidHome.apk
-scripts/buchi.sh plan               # shows what cleanup would change, changes nothing
-scripts/buchi.sh install            # installs, removes Projectivy, makes Steroid the Home app
-scripts/buchi.sh clean              # debloat (writes backup/restore.sh first)
-little-office/install.sh            # Mac: agent status for the TV (optional)
+scripts/connect.sh 192.168.1.50
 ```
 
-On the TV, choose **Allow** when it asks about TV listings.
+The TV asks **"Allow debugging?"**: tick **Always allow**, then choose **OK**.
 
-## One install for everything
+### 4. Install everything with one command
 
+```bash
+scripts/buchi.sh all
 ```
-cd ~/Public/steroid && scripts/buchi.sh all
-```
 
-Installs the cut out tool for the depth effect (once), builds and installs the launcher, refreshes Little
-Office (notices and approvals), prepares your photos, avatar, name and depth masks for the TV, and makes
-Steroid photos the screensaver. Safe to run again any time: unchanged photos keep their depth masks.
+That's it. It builds the launcher, installs it on the TV, makes it the home screen, sets up Little Office,
+sends your photos (see [Your photos](#your-photos-and-profile-picture)) and turns on the photo screensaver.
+On the TV, choose **Allow** if it asks about TV listings. Run the same command again any time; it's safe.
+
+### Optional extras
+
+| Want to… | Run |
+|---|---|
+| Remove ads, trackers and apps you never use (writes an undo file first) | `scripts/buchi.sh plan` to see, then `scripts/buchi.sh clean` |
+| Add or change your photos | put them in `personal/photos`, then `scripts/buchi.sh myphotos` |
+| Check that Little Office reaches the TV | `scripts/buchi.sh office` |
+| Put everything back as it was | `scripts/buchi.sh undo` |
+
+### On a Windows PC
+
+- **Little Office** (agent status, notices and approvals from this PC): install
+  [Python](https://www.python.org/downloads/) and tick **"Add python.exe to PATH"**. Copy the `little-office`
+  folder to the PC, right click **PowerShell → Run as administrator**, go to that folder and run
+  `Set-ExecutionPolicy -Scope Process Bypass; .\install-windows.ps1`. Set your Wi‑Fi to **Private**
+  (Settings → Network → your Wi‑Fi) so the TV can reach the PC.
+- **Building the launcher on Windows**: run `wsl --install` in an administrator PowerShell, open Ubuntu,
+  run `sudo apt install openjdk-17-jdk unzip zip curl python3`, download the **Linux** command line tools,
+  and use step 1's last line with `$HOME/Android/Sdk` instead of `~/Library/Android/sdk`. Then steps 3 and 4.
+
+---
 
 ## Everyday commands
 
 | Command | What it does |
 |---|---|
+| `scripts/buchi.sh all` | everything in one go (safe to repeat) |
 | `scripts/buchi.sh update` | build, install, refresh Little Office, take diagnostics: the usual after a change |
+| `scripts/buchi.sh myphotos` | send the photos in `personal/photos` (and `profile.jpg`, your avatar) to the TV |
+| `scripts/buchi.sh screensaver` | make Steroid photos the TV's screensaver |
+| `scripts/buchi.sh office` | check Little Office end to end (`office approve` also tests an approval) |
+| `scripts/buchi.sh pip full` | a mini player stuck on screen: back to full screen (`pip close` closes it) |
 | `scripts/buchi.sh photos <folder>` | push your photos (and `profile.jpg`) to the TV |
 | `scripts/buchi.sh tune` | offline photo screensaver, ad id off |
 | `scripts/diag.sh` | 11 screenshots and logs from the TV into `diag/` |
@@ -279,15 +294,6 @@ music widget, then continues with YouTube's mix of similar tracks. Play, pause, 
 work from the widget; Open goes back into the app at the current track. Turn it off in Launcher settings
 (**Keep YouTube playing**).
 
-### Claude Code notices on the TV
-
-`little-office/install.sh` also runs `little-office/notify.sh on`, which adds Claude Code **Notification**
-and **Stop** hooks (with a backup of `~/.claude/settings.json`). The moment Claude needs you or finishes,
-a notice slides in from the right edge of the TV (project, state, one sentence), a thin line shows the time
-left, and it slides back by itself after 8 seconds. OK opens Little Office; any other key closes it.
-`notify.sh off` removes the hooks. This works for Claude Code running on the computer (terminal, the
-desktop app or an editor); sessions that run in the cloud leave nothing on the computer to report.
-
 ### Approve Claude Code requests from the TV
 
 When Claude Code (in a terminal on the computer) is about to ask permission, the TV shows the request:
@@ -326,31 +332,26 @@ Codex and Antigravity have no permission hook, so they can only notify the TV, n
 
 ## Your photos and profile picture
 
-Private photos stay off GitHub (`personal/` is ignored by git, and `scripts/privacy-guard.sh` installs
-git hooks that refuse to commit or push anything under `personal/` or any image outside the app's icons
-and the original screenshots): keep them in `personal/photos` (macOS never blocks Terminal there, unlike
-Downloads, Desktop and Documents) or put another folder's path in `personal/photos-folder` (ignored by git, like
-every image outside the app's own resources) and run `scripts/buchi.sh myphotos`. Little Office then serves
-them to paired TVs only (signed requests) and the TV fetches them into a folder it creates itself, within
-a minute and every 10 minutes after, so the avatar and slideshow never depend on adb file access.
-List photo names in `personal/skip-photos` to leave them out. A `profile.jpg` (or .png)
-in that folder becomes your avatar, and `personal/name` (one line, also private) sets the greeting's name
-until you change it on the TV. A fresh install greets **User**, and the tour asks you to add your name.
+1. In the project folder, make a folder called **`personal/photos`** and put your photos in it
+   (jpg, png or webp). Add a square photo named **`profile.jpg`**: it becomes the round picture next to
+   the greeting.
+2. Optional: a file **`personal/name`** with your first name on one line, for "Good evening, *name*".
+   (Without it the TV says **User**, and you can type your name in Launcher settings.)
+3. Run `scripts/buchi.sh myphotos`, then press Home on the TV. Your photos arrive within a minute.
 
-Your photos are woven through the slideshow (one of yours, then one of the others, and so on), and new
-photos join without restarting it. The slideshow also mixes in 50 free photos the TV downloads by itself: 16 picked from Unsplash's TV
-wallpaper search (no words, logos or watermarks; paid Unsplash+ photos left out) and 34 more Unsplash
-photos via Lorem Picsum, all under the Unsplash licence. Turn them off in Launcher settings, Background.
-
-Put your photos (jpg, png or webp) in one folder, plus a square photo named **`profile.jpg`** for the
-picture next to the greeting, then:
-
-```bash
-scripts/buchi.sh photos ~/Pictures/tv
-```
-
-They join the slideshow immediately (your photos come first in each loop). Settings, **Photo slideshow**,
-**Slow zoom** and **Change photo every** control it.
+How it works and what it keeps private:
+- **Never on GitHub.** `personal/` is ignored by git, and `scripts/privacy-guard.sh` (run by
+  `buchi.sh all`) adds a guard that refuses to commit or push anything in `personal/` or any image outside
+  the app's own icons and the original screenshots.
+- **Safe delivery.** Little Office on the Mac hands the photos only to your paired TV (signed requests), and
+  the TV saves them in its own folder, so they always load.
+- **Mixed slideshow.** Your photos alternate with 50 free photos the TV downloads itself (Unsplash
+  licence: 16 from Unsplash's TV wallpaper search with no words or watermarks, 34 via Lorem Picsum) and the
+  World's Windows views. Turn the free ones off in Launcher settings, Background.
+- **Depth effect.** In the screensaver, photos with a clear subject get it in front of the clock (masks
+  made on the Mac by `little-office/depth.py`).
+- To leave a photo out, write its file name in **`personal/skip-photos`** (one per line).
+- Keep the folder in the project, not in Downloads, Desktop or Documents: macOS can block Terminal there.
 
 ---
 
@@ -360,7 +361,7 @@ Every issue below actually happened while building this, and each has its fix.
 
 | Problem | Fix |
 |---|---|
-| **Homebrew will not install / `brew: command not found`** (Intel Mac) | Not needed. Install Java from adoptium.net and the SDK with the commands in [Requirements: Mac](#requirements-mac). |
+| **Homebrew will not install / `brew: command not found`** (Intel Mac) | Not needed. Install Java from adoptium.net and the SDK with the commands in [step 1 of the install](#1-put-two-tools-on-the-mac-once). |
 | **`mv: rename ... /usr/local/bin/android: No such file or directory`** | That installer (Android CLI) needs `/usr/local/bin`. Skip it and use the command line tools zip instead. |
 | **The SDK command "does not work" with the downloaded zip** | The zip is named `commandlinetools-mac_x86_64-...`; use the pattern `commandlinetools-mac*.zip` as above. |
 | **Build fails: `NullPointerException: Cannot invoke "String.length()"` in `d8`** | build-tools 34 cannot read classes compiled by Java 25. Install build-tools 36: `sdkmanager --sdk_root=$HOME/Library/Android/sdk "build-tools;36.0.0"`. The scripts pick the newest automatically. |
