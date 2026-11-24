@@ -1102,7 +1102,7 @@ public class Home extends Activity {
                 if (p == null) { pipBar.setVisibility(View.GONE); return; }
                 String label = p;
                 for (Apps.App a : installed) if (a.pkg.equals(p)) { label = a.label; break; }
-                pipText.setText(label + " is playing in a mini player");
+                pipText.setText(label + " is in a mini player · press Home again to bring it back");
                 pipBar.setVisibility(View.VISIBLE);
                 if (!was && tour == null && quick == null) { scroll.smoothScrollTo(0, 0); pipFull.requestFocus(); } // one press of OK brings it back
             });
@@ -1328,6 +1328,12 @@ public class Home extends Activity {
     /** Pressing Home on the remote always lands at the top, on the first app. */
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        // Home pressed while you're already on the home screen and an app floats in a mini player:
+        // push it back up into its app, full screen. (Coming home from another app never does this.)
+        if (hasWindowFocus() && pipPkg != null && pipBar != null && pipBar.getVisibility() == View.VISIBLE) {
+            PipWatch.full(this, pipPkg);
+            return;
+        }
         if (scroll != null) scroll.scrollTo(0, 0);
         if (firstApp != null) firstApp.requestFocus();
     }

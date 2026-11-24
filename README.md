@@ -82,7 +82,8 @@ centre, or the compass in Little Office.
   Date & time, Settings), then Launcher, Glass (white when on), Tour and Privacy.
 - **Mini player rescue:** when any app is left floating in a mini player (picture in picture), a bar at
   the top of the home screen says so, with **Full screen** (already selected: one OK) and **Close**. The
-  Control centre has a **Mini player** button too. From the Mac: `scripts/buchi.sh pip full` or `pip close`.
+  Control centre has a **Mini player** button too, and pressing **Home** while you're already on the home
+  screen pushes the mini player back up into its app. From the Mac: `scripts/buchi.sh pip full` or `pip close`.
 - **Recent apps → Close all** closes everything: every player is stopped (including the background YouTube
   player and the radio), apps are freed from memory, the Resume card and the music widget clear, and the
   list starts empty; only apps you open afterwards appear again.
