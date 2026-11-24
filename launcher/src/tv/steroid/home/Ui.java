@@ -40,6 +40,7 @@ final class Ui {
     static TextView label(Context c, String s, int color) {
         TextView t = text(c, mono, 10.5f, color);
         t.setLetterSpacing(0.22f);
+        t.setShadowLayer(px(6), 0, px(1), 0xB3000000);
         t.setText(s.toUpperCase());
         return t;
     }
@@ -53,8 +54,39 @@ final class Ui {
 
     static void lift(View v, boolean f, float scale) {
         v.animate().scaleX(f ? scale : 1f).scaleY(f ? scale : 1f)
-            .translationZ(f ? px(14) : 0).setDuration(200).start();
+            .translationZ(0).setDuration(180).start();
     }
+
+    /**
+     * Focus frame: the focus ring sits OUTSIDE the content (a gap, then a 2.5dp white ring), and the
+     * whole frame zooms evenly, so app art is never covered or squeezed. Returns the focusable outer view;
+     * put the card's content in the returned frame's child (frame.getChildAt(0)).
+     */
+    static android.widget.FrameLayout frame(Context c, float radiusDp, float scale, Runnable onFocus) {
+        android.widget.FrameLayout outer = new android.widget.FrameLayout(c);
+        outer.setFocusable(true);
+        outer.setClipChildren(false);
+        int gap = px(4);
+        outer.setPadding(gap, gap, gap, gap);
+        GradientDrawable ring = new GradientDrawable();
+        ring.setCornerRadius(px(radiusDp + 4));
+        ring.setColor(0x00000000);
+        outer.setBackground(ring);
+        android.widget.FrameLayout inner = new android.widget.FrameLayout(c);
+        inner.setClipToOutline(true);
+        inner.setBackground(round(0x26FFFFFF, radiusDp));
+        outer.addView(inner, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        Selector.shape(outer, px(radiusDp + 4), true); // the shared focus ring traces this exact shape
+        outer.setOnFocusChangeListener((v, f) -> {
+            lift(v, f, scale);
+            if (f && onFocus != null) onFocus.run();
+        });
+        return outer;
+    }
+
+    static android.widget.FrameLayout inner(View frame) { return (android.widget.FrameLayout) ((android.view.ViewGroup) frame).getChildAt(0); }
+
+    static float dpWidth(Context c) { return c.getResources().getDisplayMetrics().widthPixels / dp; }
 
     static int withAlpha(int color, int alpha) { return (color & 0x00FFFFFF) | (alpha << 24); }
 }
