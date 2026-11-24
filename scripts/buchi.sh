@@ -1,5 +1,6 @@
 #!/bin/bash
 # Buchi's setup, one step at a time. Run from the repo folder:  scripts/buchi.sh <step>
+#   all      EVERYTHING in one go: depth tool, build, install, Little Office, your photos, screensaver
 #   check    tools ready?                     build    build the launcher APK
 #   plan     show what cleanup WOULD change (changes nothing)
 #   install  install launcher, grant permissions, remove Projectivy, make it Home
@@ -76,18 +77,27 @@ case "$1" in
     [ -d "$F" ] || { echo "Put your photo folder's path in personal/photos-folder first."; exit 1; }
     # a private copy Little Office can serve to paired TVs (macOS keeps background services out of Downloads);
     # photos named in personal/skip-photos (ones with words on them, say) are left out
-    L="$HOME/.little-office/photos"; mkdir -p "$L"; rm -f "$L"/*
+    L="$HOME/.little-office/photos"; mkdir -p "$L"
     SKIP="$(cat personal/skip-photos 2>/dev/null)"
-    n=0; for f in "$F"/*; do
+    # bring the copy up to date without wiping it: new or changed photos come in, removed ones go
+    # (with their depth masks); unchanged photos keep their masks
+    n=0; seen=" "
+    for f in "$F"/*; do
       b="$(basename "$f")"
       case "$(echo "$b" | tr "A-Z" "a-z")" in *.jpg|*.jpeg|*.png|*.webp) ;; *) continue;; esac
       echo "$SKIP" | grep -qxF "$b" && { echo "skipped $b"; continue; }
-      cp "$f" "$L/" && n=$((n+1))
+      [ -f "$L/$b" ] && [ ! "$f" -nt "$L/$b" ] || cp -p "$f" "$L/" || continue
+      n=$((n+1)); seen="$seen$b|"
     done
     if [ "$n" = 0 ]; then
-      echo "No photos copied. If the folder isn't empty, macOS is blocking Terminal from it:"
-      echo "System Settings > Privacy & Security > Files and Folders > Terminal > turn on Downloads Folder, then run this again."
-      exit 1
+      echo "Couldn't read your photo folder. If it isn't empty, macOS is blocking Terminal from it:"
+      echo "System Settings > Privacy & Security > Files and Folders > Terminal > turn on Downloads Folder."
+      echo "Keeping the photos already prepared for the TV ($(ls "$L" | grep -vic '\.mask\.') files)."
+    else
+      for g in "$L"/*; do
+        b="$(basename "$g")"; base="${b%.mask.png}"
+        case "$seen" in *"|$base|"*|*" $base|"*) ;; *) rm -f "$g" && echo "removed $b";; esac
+      done
     fi
     # depth effect masks for the screensaver (needs rembg once: pip3 install "rembg[cpu]")
     if "$PY" -c "import rembg" 2>/dev/null; then "$PY" little-office/depth.py "$L"
@@ -108,6 +118,19 @@ P
   office) shift; scripts/office-check.sh "$@" ;;  # Little Office end to end: buchi.sh office [approve]
   screensaver)  # use the Steroid photos screensaver (your photos, full colour, small clock) instead of Backdrop
     tv shell settings put secure screensaver_components tv.steroid.home/.PhotoDream && echo "Screensaver: Steroid photos" ;;  # Little Office end to end: buchi.sh office [approve]
+  all)  # everything in one go: depth tool, build and install, Little Office, your photos, screensaver
+    echo "== 1/5  Cut out tool for the depth effect"
+    "$PY" -c "import rembg" 2>/dev/null || "$PY" -m pip install --user -q "rembg[cpu]" 2>/dev/null \
+      || "$PY" -m pip install --user --break-system-packages -q "rembg[cpu]" || echo "   rembg didn't install: photos will show without depth"
+    echo "== 2/5  Build, install on the TV, Little Office, diagnostics"
+    "$0" update || { echo "Stopped: the build or install failed (see above)."; exit 1; }
+    echo "== 3/5  Your photos, avatar, name and depth masks"
+    "$0" myphotos
+    echo "== 4/5  Screensaver"
+    "$0" screensaver
+    echo "== 5/5  Tidy up"
+    rm -f "$HOME/.little-office/photos/masks.tgz"
+    echo "All done. Press Home on the TV; your photos arrive within a minute." ;;
   update)  # the whole fix in one go: build, install on the TV, refresh Little Office, then check the TV
     scripts/build.sh && "$0" install && little-office/install.sh && scripts/diag.sh ;;
   pip) shift; scripts/pip.sh "$@" ;;   # mini player stuck? buchi.sh pip full / pip close

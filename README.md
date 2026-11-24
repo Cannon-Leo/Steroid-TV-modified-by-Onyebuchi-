@@ -187,6 +187,16 @@ little-office/install.sh            # Mac: agent status for the TV (optional)
 
 On the TV, choose **Allow** when it asks about TV listings.
 
+## One install for everything
+
+```
+cd ~/Public/steroid && scripts/buchi.sh all
+```
+
+Installs the cut out tool for the depth effect (once), builds and installs the launcher, refreshes Little
+Office (notices and approvals), prepares your photos, avatar, name and depth masks for the TV, and makes
+Steroid photos the screensaver. Safe to run again any time: unchanged photos keep their depth masks.
+
 ## Everyday commands
 
 | Command | What it does |
