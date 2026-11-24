@@ -9,6 +9,9 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $dir = Join-Path $env:USERPROFILE ".little-office"
 New-Item -ItemType Directory -Force -Path $dir | Out-Null
 Copy-Item (Join-Path $here "office.py") (Join-Path $dir "office.py") -Force
+Copy-Item (Join-Path $here "approvals.py") (Join-Path $dir "approvals.py") -Force
+Copy-Item (Join-Path $here "schema.py") (Join-Path $dir "schema.py") -Force
+Copy-Item (Join-Path $here "approve_hook.py") (Join-Path $dir "approve_hook.py") -Force
 
 $py = (Get-Command python -ErrorAction SilentlyContinue).Source
 if (-not $py) { throw "Python 3 not found. Install it from python.org (tick 'Add python.exe to PATH'), then run this again." }

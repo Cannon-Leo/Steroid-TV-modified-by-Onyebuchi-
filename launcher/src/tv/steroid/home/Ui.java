@@ -38,8 +38,10 @@ final class Ui {
     }
 
     static TextView label(Context c, String s, int color) {
-        TextView t = text(c, mono, 10.5f, color);
-        t.setLetterSpacing(0.22f);
+        TextView t = text(c, mono, 11.5f, color); // 10 foot legibility: never below 11.5
+        t.setLetterSpacing(0.18f);
+        t.setSingleLine(true);                     // long labels end in … instead of wrapping into the row
+        t.setEllipsize(android.text.TextUtils.TruncateAt.END);
         t.setShadowLayer(px(6), 0, px(1), 0xB3000000);
         t.setText(s.toUpperCase());
         return t;

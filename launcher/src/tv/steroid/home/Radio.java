@@ -108,7 +108,7 @@ public class Radio extends Activity {
         bg.setCornerRadius(Ui.px(16));
         t.setBackground(bg);
 
-        TextView num = Ui.text(this, Ui.mono, 10, 0x99FFFFFF);
+        TextView num = Ui.text(this, Ui.mono, 11.5f, 0x99FFFFFF);
         num.setText(String.format("%02d", i + 1));
         FrameLayout.LayoutParams nlp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
         nlp.setMargins(0, Ui.px(12), Ui.px(14), 0);
@@ -124,7 +124,7 @@ public class Radio extends Activity {
         name.setEllipsize(android.text.TextUtils.TruncateAt.END);
         txt.addView(name);
         TextView g = Ui.label(this, parts.length > 1 ? parts[1] : Stations.genre(i).replace(" | ", " · "), 0xB3FFFFFF);
-        g.setTextSize(9.5f);
+        g.setTextSize(11f);
         g.setMaxLines(1);
         g.setPadding(0, Ui.px(6), 0, 0);
         txt.addView(g);
@@ -153,16 +153,25 @@ public class Radio extends Activity {
         GradientDrawable bg = Ui.round(0x14FFFFFF, 16);
         bg.setStroke(Ui.px(1), 0x33FFFFFF);
         t.setBackground(bg);
+        // same layout as a station tile: + where the number sits, title and line bottom left
+        Icon plus = new Icon(this, Icon.PLUS);
+        FrameLayout.LayoutParams plp = new FrameLayout.LayoutParams(Ui.px(22), Ui.px(22), Gravity.TOP | Gravity.END);
+        plp.setMargins(0, Ui.px(12), Ui.px(12), 0);
+        t.addView(plus, plp);
         LinearLayout in = new LinearLayout(this);
         in.setOrientation(LinearLayout.VERTICAL);
-        in.setGravity(Gravity.CENTER);
-        Icon plus = new Icon(this, Icon.PLUS);
-        in.addView(plus, new LinearLayout.LayoutParams(Ui.px(26), Ui.px(26)));
-        TextView l = Ui.text(this, Ui.sansMedium, 13, 0xE6FFFFFF);
+        in.setPadding(Ui.px(16), 0, Ui.px(16), Ui.px(14));
+        TextView l = Ui.text(this, Ui.serif, 22, 0xFFFFFFFF);
         l.setText("Add station");
-        l.setPadding(0, Ui.px(8), 0, 0);
+        l.setMaxLines(1);
+        l.setEllipsize(android.text.TextUtils.TruncateAt.END);
         in.addView(l);
-        t.addView(in, new FrameLayout.LayoutParams(-1, -1));
+        TextView g = Ui.label(this, "Your own stream link", 0xB3FFFFFF);
+        g.setTextSize(11f);
+        g.setMaxLines(1);
+        g.setPadding(0, Ui.px(6), 0, 0);
+        in.addView(g);
+        t.addView(in, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
         GridLayout.LayoutParams lp = new GridLayout.LayoutParams();
         lp.width = Ui.px(166); lp.height = Ui.px(96);
         lp.setMargins(Ui.px(7), Ui.px(7), Ui.px(7), Ui.px(7));

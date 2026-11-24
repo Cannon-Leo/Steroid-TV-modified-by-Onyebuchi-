@@ -13,6 +13,15 @@ final class Prefs {
     static String name(Context c) { return sp(c).getString("name", "Onyebuchi"); }
     static void name(Context c, String n) { sp(c).edit().putString("name", n.trim()).apply(); }
 
+    /** Header options (Settings, Home screen header). */
+    static boolean on(Context c, String k, boolean def) { return sp(c).getBoolean(k, def); }
+    static boolean showClock(Context c) { return on(c, "showClock", true); }
+    static boolean showSeconds(Context c) { return on(c, "showSeconds", true); }
+    static boolean showDate(Context c) { return on(c, "showDate", true); }
+    static boolean showYear(Context c) { return on(c, "showYear", true); }
+    static boolean showGreeting(Context c) { return on(c, "showGreeting", true); }
+    static boolean glassPanels(Context c) { return on(c, "glassPanels", true); }
+
     static boolean photos(Context c) { return sp(c).getBoolean("photos", true); }
     static boolean drift(Context c) { return sp(c).getBoolean("drift", true); }
     static int interval(Context c) { return sp(c).getInt("interval", 30); }

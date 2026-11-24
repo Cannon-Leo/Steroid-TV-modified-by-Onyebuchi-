@@ -41,7 +41,8 @@ public class Home extends Activity {
     ScrollView scroll;
     View firstApp;
     Ambient ambient;
-    TextView clock, meridiem, date, greeting, focusTitle;
+    TextView clock, meridiem, date, greeting, focusTitle, seconds;
+    View timeRow, whoRow;
     TextView retroTitle, retroBlurb, radioState, radioName, chip;
     RetroPanel retroPanel;
     LinearLayout watchRow, mineRow, allBox;
@@ -66,6 +67,7 @@ public class Home extends Activity {
             View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
 
         FrameLayout root = new FrameLayout(this);
+        rootView = root;
         root.setClipChildren(false);
         ambient = new Ambient(this);
         root.addView(ambient);
@@ -88,15 +90,21 @@ public class Home extends Activity {
             if (!Prefs.shown(this, k)) continue;
             View sec = section(k);
             if (sec == null) continue;
+            sectionViews.put(k, sec);
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
             lp.topMargin = Ui.px(GAP);
             col.addView(sec, lp);
         }
+        // always last: a way back into the guided tour for anyone using the TV
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(-1, Ui.px(112));
+        tlp.topMargin = Ui.px(GAP);
+        col.addView(tourCard(), tlp);
 
         selector = Selector.attach(this, root); // one gliding focus ring above everything
-        History.listener = () -> { if (resumed) for (Shelf sh : shelves) sh.refresh(); }; // rows update as you watch
+        History.listener = () -> { if (resumed) { for (Shelf sh : shelves) sh.refresh(); fillIdle(); } }; // rows update as you watch
         setContentView(root);
         rebuildApps();
+        if (!Prefs.on(this, "tourDone", false)) h.postDelayed(this::startTour, 1500); // first time only
         if (firstApp != null) firstApp.requestFocus();
 
         android.content.IntentFilter f = new android.content.IntentFilter();
@@ -154,13 +162,19 @@ public class Home extends Activity {
                 if (!hasRetro && !hasRadio) return null;
                 LinearLayout worlds = new LinearLayout(this);
                 worlds.setClipChildren(false);
-                if (hasRetro) worlds.addView(retro(), new LinearLayout.LayoutParams(0, -1, 1.75f));
+                boolean hasLive = Config.feature("liveTv");
+                if (hasRetro) worlds.addView(retro(), new LinearLayout.LayoutParams(0, -1, hasLive ? 1.6f : 1.75f));
+                if (hasLive) {
+                    LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(0, -1, 1f);
+                    if (hasRetro) llp.leftMargin = Ui.px(18);
+                    worlds.addView(liveCard(), llp);
+                }
                 if (hasRadio) {
                     LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(0, -1, 1f);
-                    if (hasRetro) rlp.leftMargin = Ui.px(18);
+                    if (hasRetro || hasLive) rlp.leftMargin = Ui.px(18);
                     worlds.addView(radio(), rlp);
                 }
-                box.addView(worlds, new LinearLayout.LayoutParams(-1, Ui.px(160 * sc)));
+                box.addView(worlds, new LinearLayout.LayoutParams(-1, Ui.px(172 * sc)));
                 return box;
             }
             case "mine":
@@ -219,9 +233,16 @@ public class Home extends Activity {
         clock.setLetterSpacing(-0.02f);
         clock.setShadowLayer(Ui.px(14), 0, Ui.px(2), 0x99000000);
         time.addView(clock);
+        seconds = Ui.text(this, Ui.serif, 30, 0xB3FFFFFF); // small seconds beside the big time
+        seconds.setPadding(Ui.px(2), 0, 0, Ui.px(13));
+        seconds.setShadowLayer(Ui.px(8), 0, Ui.px(1), 0x99000000);
+        // fixed size, so the text changing every second never re-lays out the page
+        time.addView(seconds, new LinearLayout.LayoutParams(Ui.px(52), Ui.px(48)));
+        seconds.setGravity(Gravity.BOTTOM | Gravity.START);
         meridiem = Ui.text(this, Ui.serifItalic, 26, 0xB3FFFFFF);
         meridiem.setPadding(Ui.px(8), 0, 0, Ui.px(14));
         time.addView(meridiem);
+        timeRow = time;
         left.addView(time);
         LinearLayout who = new LinearLayout(this);
         who.setGravity(Gravity.CENTER_VERTICAL);
@@ -239,6 +260,7 @@ public class Home extends Activity {
         right.setOrientation(LinearLayout.VERTICAL);
         right.setGravity(Gravity.END);
         LinearLayout sys = new LinearLayout(this);
+        tourIcons = sys;
         sys.setGravity(Gravity.CENTER_VERTICAL);
         sys.addView(iconButton(Icon.ASSIST, "Assistant", new Intent(Intent.ACTION_ASSIST),
             new Intent("android.intent.action.VOICE_ASSIST"), new Intent(Intent.ACTION_SEARCH_LONG_PRESS),
@@ -254,13 +276,16 @@ public class Home extends Activity {
         sys.addView(iconButton(Icon.WIFI, "Wi-Fi", new Intent(Settings.ACTION_WIFI_SETTINGS)));
         sys.addView(iconButton(Icon.BLUETOOTH, "Bluetooth", new Intent(Settings.ACTION_BLUETOOTH_SETTINGS)));
         sys.addView(iconButton(Icon.SOUND, "Sound", new Intent(Settings.ACTION_SOUND_SETTINGS)));
-        sys.addView(iconButton(Icon.GEAR, "Settings", new Intent(Settings.ACTION_SETTINGS)));
+        View gear = iconButton(Icon.GEAR, "Quick settings", new Intent(Settings.ACTION_SETTINGS));
+        gear.setOnClickListener(v -> { quickFrom = v; QuickPanel.open(this, rootView, scroll); }); // quick panel first
+        sys.addView(gear);
         right.addView(sys, new LinearLayout.LayoutParams(-2, -2));
         // widgets under the icons: music (only while something plays) and the system glance
         // Widgets under the icons, fixed sizes so nothing on the page moves:
         //  playing:  [swap] [music player]   (swap flips to the system card and back)
         //  idle:     [Play music] 16dp [system card]
         LinearLayout widgets = new LinearLayout(this);
+        tourWidgets = widgets;
         widgets.setGravity(Gravity.TOP | Gravity.END);
         widgets.setClipChildren(false);
         swap = iconButton(Icon.SWAP, "Switch between music and system", (Intent[]) null);
@@ -358,7 +383,7 @@ public class Home extends Activity {
         windowName.setEllipsize(android.text.TextUtils.TruncateAt.END);
         t.addView(windowName);
         windowWhere = Ui.label(this, "", 0x99FFFFFF);
-        windowWhere.setTextSize(9.5f);
+        windowWhere.setTextSize(11f);
         windowWhere.setSingleLine(true);
         windowWhere.setPadding(0, Ui.px(4), 0, 0);
         t.addView(windowWhere);
@@ -372,7 +397,7 @@ public class Home extends Activity {
         w.addView(ring, new FrameLayout.LayoutParams(-1, -1));
         w.setOnFocusChangeListener((v, f) -> {
             Ui.lift(v, f, 1.03f);
-            rd.setStroke(Ui.px(1), f ? 0x33FFFFFF : 0x1FFFFFFF);
+            // the focus ring alone marks focus: no second border
             if (f) ambient.tint(0xFF5FA8C8);
         });
         w.setOnClickListener(v -> startActivity(new Intent(this, Windows.class)));
@@ -652,9 +677,17 @@ public class Home extends Activity {
 
     View swap, musicIdle;
     boolean showStats;
+    QuickPanel quick;
+    Tour tour;
+    View tourIcons, tourWidgets, tourAvatar;
+    final java.util.Map<String, View> sectionViews = new java.util.HashMap<>();
+    ViewGroup quickPage;
+    View quickFrom;
+    FrameLayout rootView;
 
     void updateWidgets() {
         boolean active = nowPlaying.active;
+        if (!active) fillIdle();
         swap.setVisibility(active && stats != null ? View.VISIBLE : View.GONE);
         musicIdle.setVisibility(active ? View.GONE : View.VISIBLE);
         nowPlaying.setVisibility(active && !showStats ? View.VISIBLE : View.GONE);
@@ -663,29 +696,73 @@ public class Home extends Activity {
     }
 
     /** Shown while nothing plays: OK lists every app that can play music or video, with its icon. */
+    /** Idle music card: "Resume <last thing played>" when there is one (YouTube and YouTube Music stop
+     *  their player when you leave them, so this is the way back), otherwise "Play music". */
+    TextView idleTop, idleTitle, idleSub;
+    Intent idleGo;
+
     View idleMusicCard() {
         LinearLayout c = new LinearLayout(this);
         c.setOrientation(LinearLayout.VERTICAL);
         c.setGravity(Gravity.CENTER_VERTICAL);
         c.setFocusable(true);
-        c.setPadding(Ui.px(18), Ui.px(14), Ui.px(18), Ui.px(14));
+        c.setPadding(Ui.px(18), Ui.px(12), Ui.px(18), Ui.px(12));
         Glass.apply(c, 18, 0x99101014);
-        Icon i = new Icon(this, Icon.MUSIC);
-        c.addView(i, new LinearLayout.LayoutParams(Ui.px(26), Ui.px(26)));
-        TextView t = Ui.text(this, Ui.sansMedium, 15, 0xFFFFFFFF);
-        t.setText("Play music");
-        t.setPadding(0, Ui.px(10), 0, Ui.px(2));
-        c.addView(t);
-        TextView s2 = Ui.text(this, Ui.sans, 12, 0x99FFFFFF);
-        s2.setText("Choose an app");
-        c.addView(s2);
-        c.setOnFocusChangeListener((v, f) -> Ui.lift(v, f, 1.04f));
+        LinearLayout top = new LinearLayout(this);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        top.addView(new Icon(this, Icon.MUSIC), new LinearLayout.LayoutParams(Ui.px(20), Ui.px(20)));
+        idleTop = Ui.label(this, "", 0xB3FFFFFF);
+        idleTop.setPadding(Ui.px(8), 0, 0, 0);
+        top.addView(idleTop, new LinearLayout.LayoutParams(0, -2, 1));
+        c.addView(top);
+        idleTitle = Ui.text(this, Ui.sansMedium, 15, 0xFFFFFFFF);
+        idleTitle.setSingleLine(true);
+        idleTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        idleTitle.setPadding(0, Ui.px(8), 0, Ui.px(2));
+        c.addView(idleTitle);
+        idleSub = Ui.text(this, Ui.sans, 12.5f, 0xA6FFFFFF);
+        idleSub.setSingleLine(true);
+        idleSub.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        c.addView(idleSub);
+        Selector.shape(c, Ui.px(18), Ui.px(3)); // ring hugs the card closely, no zoom
         c.setOnClickListener(v -> {
-            List<Apps.App> media = new ArrayList<>();
-            for (Apps.App a : installed) if (MEDIA_APPS.contains(a.pkg) || watchList().contains(a.pkg)) media.add(a);
-            Apps.pick(this, "Play with", media, Apps::open0);
+            if (idleGo != null) try { startActivity(idleGo); return; } catch (Exception ignored) {}
+            pickMusic();
         });
+        c.setOnLongClickListener(v -> { pickMusic(); return true; });
+        fillIdle();
         return c;
+    }
+
+    void pickMusic() {
+        List<Apps.App> media = new ArrayList<>();
+        for (Apps.App a : installed) if (MEDIA_APPS.contains(a.pkg) || watchList().contains(a.pkg)) media.add(a);
+        Apps.pick(this, "Play with", media, Apps::open0);
+    }
+
+    void fillIdle() {
+        if (idleTitle == null) return;
+        idleGo = null;
+        try {
+            org.json.JSONArray hist = History.load(this);
+            for (int k = 0; k < hist.length(); k++) {
+                org.json.JSONObject e = hist.getJSONObject(k);
+                if (System.currentTimeMillis() - e.optLong("at") > 3 * 86400000L) break; // only recent listening
+                String pkg = e.optString("pkg");
+                if (!MEDIA_APPS.contains(pkg)) continue;
+                idleGo = Intent.parseUri(e.optString("intent"), Intent.URI_INTENT_SCHEME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                idleTop.setText("Resume");
+                idleTitle.setText(e.optString("title"));
+                String app = pkg;
+                for (Apps.App a : installed) if (a.pkg.equals(pkg)) { app = a.label; break; }
+                String sub = e.optString("sub");
+                idleSub.setText(sub.isEmpty() ? app : sub + " · " + app);
+                return;
+            }
+        } catch (Exception ignored) {}
+        idleTop.setText("Music");
+        idleTitle.setText("Play music");
+        idleSub.setText("Choose an app");
     }
 
     /** Apps that play music or video (the Watch row counts too). */
@@ -701,6 +778,7 @@ public class Home extends Activity {
     View avatar() {
         // outer: focus ring sits outside the photo with a small gap; inner: the round photo itself
         FrameLayout f = new FrameLayout(this);
+        tourAvatar = f;
         f.setFocusable(true);
         f.setClipChildren(false);
         f.setPadding(Ui.px(4), Ui.px(4), Ui.px(4), Ui.px(4));
@@ -792,21 +870,37 @@ public class Home extends Activity {
         LinearLayout v = new LinearLayout(this);
         v.setOrientation(LinearLayout.VERTICAL);
         v.setClipChildren(false);
-        v.addView(Ui.label(this, "Retro TV", 0xB3FFFFFF));
-        retroTitle = Ui.text(this, Ui.serif, 34, 0xFFFFFFFF);
-        retroTitle.setPadding(0, Ui.px(8), 0, Ui.px(4));
+        // the text column stops before the little TV on the right, so nothing runs under it
+        int crt = Ui.px(RetroPanel.TV_W + 16);
+        TextView lab = Ui.label(this, "Retro TV", 0xB3FFFFFF);
+        lab.setPadding(0, 0, crt, 0);
+        v.addView(lab);
+        retroTitle = Ui.text(this, Ui.serif, 28, 0xFFFFFFFF);
+        retroTitle.setSingleLine(true);
+        retroTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        retroTitle.setIncludeFontPadding(false);
+        retroTitle.setPadding(0, Ui.px(10), crt, Ui.px(6));
         v.addView(retroTitle);
-        retroBlurb = Ui.text(this, Ui.sans, 12, 0xB3FFFFFF);
-        retroBlurb.setMaxLines(1);
+        retroBlurb = Ui.text(this, Ui.sans, 13, 0xBFFFFFFF);
+        retroBlurb.setMaxLines(2);
+        retroBlurb.setLineSpacing(Ui.px(3), 1f);
         retroBlurb.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        retroBlurb.setPadding(0, 0, Ui.px(118), 0);
+        retroBlurb.setPadding(0, 0, crt, 0);
         v.addView(retroBlurb);
-        v.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1f));
+        v.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1f)); // the dial sits on the bottom edge
+        LinearLayout.LayoutParams gapLp = new LinearLayout.LayoutParams(1, Ui.px(12));
+        v.addView(new View(this), gapLp);
 
+        // decade dial: six equal chips that always fit the card's width
         LinearLayout dial = new LinearLayout(this);
         dial.setClipChildren(false);
-        for (int i = 0; i < Retro.DECADES.length; i++) dial.addView(decade(i));
-        v.addView(dial);
+        for (int i = 0; i < Retro.DECADES.length; i++) {
+            View d = decade(i);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, Ui.px(34), 1f);
+            if (i > 0) lp.leftMargin = Ui.px(8);
+            dial.addView(d, lp);
+        }
+        v.addView(dial, new LinearLayout.LayoutParams(-1, Ui.px(34)));
         retroPanel.addView(v, new FrameLayout.LayoutParams(-1, -1));
         setDecade(0);
         return retroPanel;
@@ -815,17 +909,16 @@ public class Home extends Activity {
     View decade(int i) {
         String[] d = Retro.DECADES[i];
         int accent = Color.parseColor(d[3]);
-        TextView t = Ui.text(this, Ui.serifItalic, 20, 0xD9FFFFFF);
+        TextView t = Ui.text(this, Ui.serifItalic, 17, 0xD9FFFFFF);
         t.setText("’" + d[0]);
         t.setGravity(Gravity.CENTER);
+        t.setIncludeFontPadding(false);
+        t.setSingleLine(true);
         t.setFocusable(true);
         GradientDrawable bg = Ui.round(0x1AFFFFFF, 12);
         t.setBackground(bg);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(Ui.px(54), Ui.px(40));
-        lp.rightMargin = Ui.px(8);
-        t.setLayoutParams(lp);
+        Selector.shape(t, Ui.px(12), Ui.px(3));
         t.setOnFocusChangeListener((v, f) -> {
-            Ui.lift(v, f, 1.08f);
             bg.setColor(f ? accent : 0x1AFFFFFF);
             t.setTextColor(f ? 0xFF121014 : 0xD9FFFFFF);
             if (f) setDecade(i);
@@ -847,6 +940,7 @@ public class Home extends Activity {
     class RetroPanel extends FrameLayout {
         final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG), scan = new Paint(), glass = new Paint(Paint.ANTI_ALIAS_FLAG),
             body = new Paint(Paint.ANTI_ALIAS_FLAG), stroke = new Paint(Paint.ANTI_ALIAS_FLAG), digits = new Paint(Paint.ANTI_ALIAS_FLAG);
+        static final int TV_W = 72;
         int decade, accent = 0xFFD8B47A;
 
         RetroPanel(Context c) {
@@ -870,7 +964,7 @@ public class Home extends Activity {
             c.drawRoundRect(0.5f, 0.5f, w - 0.5f, h - 0.5f, r, r, stroke);
 
             // CRT set
-            float tw = Ui.px(100), th = Ui.px(72), tx = w - tw - Ui.px(24), ty = Ui.px(18);
+            float tw = Ui.px(TV_W), th = Ui.px(TV_W * 0.72f), tx = w - tw - Ui.px(22), ty = Ui.px(18);
             body.setColor(decade <= 2 ? 0xFF4A3426 : decade <= 4 ? 0xFF2A2A30 : 0xFF141418);
             c.drawRoundRect(tx, ty, tx + tw, ty + th, Ui.px(decade <= 2 ? 16 : 8), Ui.px(decade <= 2 ? 16 : 8), body);
             float inset = Ui.px(decade >= 5 ? 5 : 10);
@@ -884,7 +978,7 @@ public class Home extends Activity {
             c.clipRect(sx, sy, sx + sw, sy + sh);
             for (float y = sy; y < sy + sh; y += Ui.px(3)) c.drawRect(sx, y, sx + sw, y + Ui.px(1), scan);
             c.restore();
-            digits.setTextSize(Ui.px(26));
+            digits.setTextSize(Ui.px(22));
             digits.setColor(0xE6FFFFFF);
             digits.setShadowLayer(Ui.px(10), 0, 0, accent);
             c.drawText("’" + Retro.DECADES[decade][0], sx + sw / 2, sy + sh / 2 + Ui.px(9), digits);
@@ -899,6 +993,123 @@ public class Home extends Activity {
     }
 
     // ---------- Radio ----------
+
+    // ---------- First time tour ----------
+
+    void startTour() {
+        if (tour != null || isFinishing()) return;
+        if (quick != null) quick.close();
+        String n = Prefs.name(this);
+        java.util.List<Tour.Step> st = new java.util.ArrayList<>();
+        st.add(new Tour.Step(null, "Welcome", n.isEmpty() ? "Welcome to your new home screen" : "Welcome, " + n,
+            "A quick look at what's here and how to use it with the remote. Next and Back move through the tour; Skip ends it any time."));
+        st.add(new Tour.Step(() -> timeRow, "Header", "Time, date and a greeting",
+            "Choose what shows here (seconds, year, greeting) in Quick settings, then Launcher settings."));
+        st.add(new Tour.Step(() -> tourIcons, "Top icons", "Voice, inputs and Quick settings",
+            "The mic asks Google Assistant. Then Recent apps, your HDMI inputs, Wi‑Fi, Bluetooth and Sound. The gear opens Quick settings.",
+            "Open Quick settings", () -> { quickFrom = null; QuickPanel.open(this, rootView, scroll); }));
+        st.add(new Tour.Step(() -> tourWidgets, "Widgets", "Music and system at a glance",
+            "While something plays, the player shows here: OK plays or pauses, left and right reach previous, next and close. Press Home while YouTube or YouTube Music plays and it keeps playing here. The swap button flips to RAM, storage, CPU and network."));
+        addSection(st, "watch", "Watch", "Your streaming apps",
+            "Hold OK on any app for options: move it, hide it, open its info or uninstall. The + tile adds apps to this row.");
+        addSection(st, "videos", "Recently played", "Pick up where you left off",
+            "Each app gets its own row of what you played lately, newest first. OK opens it right where it was.");
+        addSection(st, "worlds", "Channels", "Retro TV, Live TV and Radio",
+            "Retro TV tunes decades from the '60s to the '10s. Live TV plays news channels' own live streams. Radio plays internet stations, and you can add your own.");
+        addSection(st, "lookout", "Look out", "The World's Windows and Little Office",
+            "Windows are calm live views from around the world. Little Office shows what Claude Code, Codex and Gemini are doing on your computers, and can approve Claude Code requests from the remote.");
+        addSection(st, "all", "All apps", "Every app on the TV",
+            "Phone apps show with their own icons too. Hold OK on an app for the same options as above.");
+        st.add(new Tour.Step(() -> tourAvatar, "You", "Your profile and settings",
+            "Your photo opens Launcher settings: your name, background photos, arrange or hide rows, hidden apps and header options."));
+        st.add(new Tour.Step(() -> tourCardView, "Tour", "Come back any time",
+            "This card at the end of the home screen replays the tour, for you or anyone else using the TV. It's also in the Control centre."));
+        st.add(new Tour.Step(null, "Done", "That's everything",
+            "Back never leaves the home screen. Home on the remote always brings you here."));
+        tour = Tour.start(this, rootView, selector, scroll, st, () -> { tour = null; Prefs.put(this, "tourDone", true); });
+    }
+
+    /** End of the home screen: replay the tour. */
+    View tourCard() {
+        LinearLayout c = new LinearLayout(this);
+        c.setGravity(Gravity.CENTER_VERTICAL);
+        c.setFocusable(true);
+        c.setPadding(Ui.px(26), Ui.px(18), Ui.px(26), Ui.px(18));
+        Glass.apply(c, 22, 0x8C101014);
+        Selector.shape(c, Ui.px(22), false);
+        FrameLayout ic = new FrameLayout(this);
+        GradientDrawable ib = new GradientDrawable();
+        ib.setShape(GradientDrawable.OVAL);
+        ib.setColor(0x338FB8FF);
+        ic.setBackground(ib);
+        Icon i = new Icon(this, Icon.COMPASS);
+        i.color(0xFFBFD6FF);
+        ic.addView(i, new FrameLayout.LayoutParams(Ui.px(26), Ui.px(26), Gravity.CENTER));
+        c.addView(ic, new LinearLayout.LayoutParams(Ui.px(56), Ui.px(56)));
+        LinearLayout t = new LinearLayout(this);
+        t.setOrientation(LinearLayout.VERTICAL);
+        t.setPadding(Ui.px(20), 0, Ui.px(12), 0);
+        t.addView(Ui.label(this, "Guided tour", 0xB3FFFFFF));
+        TextView a = Ui.text(this, Ui.serif, 26, 0xFFFFFFFF);
+        a.setText("New here? Take the tour");
+        a.setSingleLine(true);
+        a.setPadding(0, Ui.px(6), 0, Ui.px(2));
+        t.addView(a);
+        TextView b = Ui.text(this, Ui.sans, 13, 0xB3FFFFFF);
+        b.setText("Two minutes on what's here and how to use it with the remote. Skip any time.");
+        b.setSingleLine(true);
+        b.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        t.addView(b);
+        c.addView(t, new LinearLayout.LayoutParams(0, -2, 1));
+        TextView go = Ui.text(this, Ui.sansMedium, 15, 0xFF0E0E12);
+        go.setText("Start");
+        go.setGravity(Gravity.CENTER);
+        go.setPadding(Ui.px(22), 0, Ui.px(22), 0);
+        go.setBackground(Ui.round(0xFFFFFFFF, 20));
+        c.addView(go, new LinearLayout.LayoutParams(-2, Ui.px(40)));
+        c.setOnFocusChangeListener((v, f) -> Ui.lift(v, f, 1.02f));
+        c.setOnClickListener(v -> startTour());
+        tourCardView = c;
+        return c;
+    }
+    View tourCardView;
+
+    void addSection(java.util.List<Tour.Step> st, String key, String kicker, String title, String body) {
+        if (!sectionViews.containsKey(key)) return;
+        st.add(new Tour.Step(() -> sectionViews.get(key), kicker, title, body));
+    }
+
+    /** Live TV card: news channels' own 24 hour streams. */
+    View liveCard() {
+        FrameLayout p = new FrameLayout(this);
+        p.setFocusable(true);
+        p.setPadding(Ui.px(22), Ui.px(18), Ui.px(22), Ui.px(16));
+        GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{0x40E8463C, 0x1A0E1218});
+        bg.setCornerRadius(Ui.px(20));
+        bg.setStroke(Ui.px(1), 0x1FFFFFFF);
+        p.setBackground(bg);
+        LinearLayout v = new LinearLayout(this);
+        v.setOrientation(LinearLayout.VERTICAL);
+        v.addView(Ui.label(this, "● Live TV · " + LiveTV.CHANNELS.length + " channels", 0xE6FF8A80));
+        TextView t = Ui.text(this, Ui.serif, 34, 0xFFFFFFFF);
+        t.setText("On air");
+        t.setPadding(0, Ui.px(8), 0, Ui.px(4));
+        t.setMaxLines(1);
+        v.addView(t);
+        TextView sub = Ui.text(this, Ui.sans, 12.5f, 0xB3FFFFFF);
+        sub.setText("Channels TV, Arise, Al Jazeera, DW and more");
+        sub.setMaxLines(2);
+        sub.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        v.addView(sub);
+        p.addView(v, new FrameLayout.LayoutParams(-1, -1));
+        p.setOnFocusChangeListener((x, f) -> {
+            Ui.lift(x, f, 1.04f);
+            // the focus ring alone marks focus: no second border
+            if (f) ambient.tint(0xFFE8463C);
+        });
+        p.setOnClickListener(x -> startActivity(new Intent(this, LiveTV.class)));
+        return p;
+    }
 
     View radio() {
         FrameLayout p = new FrameLayout(this);
@@ -936,7 +1147,7 @@ public class Home extends Activity {
         p.addView(v, new FrameLayout.LayoutParams(-1, -1));
         p.setOnFocusChangeListener((x, f) -> {
             Ui.lift(x, f, 1.04f);
-            bg.setStroke(Ui.px(1), f ? 0x33FFFFFF : 0x1FFFFFFF);
+            // the focus ring alone marks focus: no second border
             if (f) ambient.tint(RadioService.station >= 0 ? Stations.HUE[RadioService.station] : 0xFFFF6B5A);
         });
         p.setOnClickListener(x -> startActivity(new Intent(this, Radio.class)
@@ -963,19 +1174,29 @@ public class Home extends Activity {
     }
 
     final Runnable tick = new Runnable() { public void run() {
+        h.removeCallbacks(this); // never two clocks running
         Calendar c = Calendar.getInstance();
         boolean h24 = DateFormat.is24HourFormat(Home.this);
         clock.setText(DateFormat.format(h24 ? "HH:mm" : "h:mm", c));
+        boolean sec = Prefs.showSeconds(Home.this);
+        seconds.setVisibility(sec ? View.VISIBLE : View.GONE);
+        if (sec) seconds.setText(String.format(java.util.Locale.US, ":%02d", c.get(Calendar.SECOND)));
         meridiem.setText(h24 ? "" : (c.get(Calendar.AM_PM) == Calendar.AM ? "am" : "pm"));
-        date.setText(DateFormat.format("EEEE · d MMMM", c).toString().toUpperCase());
+        date.setText(DateFormat.format(Prefs.showYear(Home.this) ? "EEEE · d MMMM yyyy" : "EEEE · d MMMM", c).toString().toUpperCase());
+        date.setVisibility(Prefs.showDate(Home.this) ? View.VISIBLE : View.INVISIBLE);
+        timeRow.setVisibility(Prefs.showClock(Home.this) ? View.VISIBLE : View.GONE);
+        greeting.setVisibility(Prefs.showGreeting(Home.this) ? View.VISIBLE : View.INVISIBLE);
         int hr = c.get(Calendar.HOUR_OF_DAY);
         String n = Prefs.name(Home.this);
         String g = hr < 5 ? "Still up" : hr < 12 ? "Good morning" : hr < 17 ? "Good afternoon" : hr < 21 ? "Good evening" : "Good night";
         greeting.setText(n.isEmpty() ? g + (hr < 5 ? "?" : ".") : g + ", " + n + (hr < 5 ? "?" : "."));
-        h.postDelayed(this, 60000 - c.get(Calendar.SECOND) * 1000);
+        // with seconds: tick on each second (one small text change); without: once a minute
+        if (sec) h.postDelayed(this, 1000 - c.get(Calendar.MILLISECOND));
+        else h.postDelayed(this, 60000 - c.get(Calendar.SECOND) * 1000);
     }};
 
     @Override protected void onResume() {
+        BgPlayer.homeShown(this); // YouTube stopped because you came home? keep it playing
         super.onResume();
         if (Prefs.layoutVersion(this) != layoutVersion) { recreate(); return; } // arrangement changed
         resumed = true;
@@ -1018,7 +1239,7 @@ public class Home extends Activity {
         if (breathe != null) breathe.pause();
     }
 
-    @Override public void onBackPressed() { /* home stays home */ }
+    @Override public void onBackPressed() { if (quick != null) quick.close(); /* otherwise home stays home */ }
 
     /** Pressing Home on the remote always lands at the top, on the first app. */
     @Override protected void onNewIntent(Intent intent) {

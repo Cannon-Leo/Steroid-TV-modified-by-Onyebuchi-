@@ -71,6 +71,18 @@ public class Personal extends Activity {
         nameRow.addView(name, new LinearLayout.LayoutParams(Ui.px(260), Ui.px(44)));
         row(profile, Icon.IMAGE, "Profile photo", "Add profile.jpg to your photo folder, then run: scripts/buchi.sh photos <folder>");
 
+        // ---- Home screen header
+        LinearLayout hdr = group("Home screen header");
+        switchRow(hdr, Icon.TIMER, "Clock", "The big time on the home screen", "showClock");
+        switchRow(hdr, Icon.TIMER, "Seconds", "Small seconds beside the time", "showSeconds");
+        switchRow(hdr, Icon.GRID, "Date", "Day and date above the time", "showDate");
+        switchRow(hdr, Icon.GRID, "Year in the date", "Tuesday · 24 November 2026", "showYear");
+        switchRow(hdr, Icon.USER, "Greeting", "Good evening, with your name", "showGreeting");
+        switchRow(hdr, Icon.CPU, "System status card", "RAM, storage, CPU and network", null,
+            () -> Prefs.shown(this, "system"), v -> Prefs.shown(this, "system", v));
+        switchRow(hdr, Icon.MUSIC, "Keep YouTube playing", "When you press Home, YouTube and YouTube Music carry on in the music widget", "ytHandoff");
+        switchRow(hdr, Icon.GEMINI, "Glass panels", "Frosted glass for cards and the quick settings panel; off uses solid dark panels", "glassPanels");
+
         // ---- Background
         LinearLayout bgGroup = group("Background");
         switchRow(bgGroup, Icon.IMAGE, "Photo slideshow", "Your photos and the World's Windows views behind the home screen", "photos");
@@ -187,17 +199,22 @@ public class Personal extends Activity {
 
     /** A whole row that toggles a setting; the switch on the right shows its state. */
     void switchRow(LinearLayout group, int icon, String title, String hint, String key) {
+        switchRow(group, icon, title, hint, key, () -> Prefs.sp(this).getBoolean(key, true), v -> Prefs.put(this, key, v));
+    }
+
+    void switchRow(LinearLayout group, int icon, String title, String hint, String key,
+                   java.util.function.BooleanSupplier get, java.util.function.Consumer<Boolean> set) {
         LinearLayout r = row(group, icon, title, hint);
         r.setFocusable(true);
-        r.setTag("sw_" + key);
+        r.setTag("sw_" + (key == null ? title : key));
         GradientDrawable bg = Ui.round(0x00FFFFFF, 16);
         r.setBackground(bg);
-        Switch sw = new Switch(this, Prefs.sp(this).getBoolean(key, true));
+        Switch sw = new Switch(this, get.getAsBoolean());
         r.addView(sw, new LinearLayout.LayoutParams(Ui.px(48), Ui.px(28)));
         r.setOnFocusChangeListener((v, f) -> bg.setColor(f ? 0x14FFFFFF : 0x00FFFFFF));
         r.setOnClickListener(v -> {
-            boolean now = !Prefs.sp(this).getBoolean(key, true);
-            Prefs.put(this, key, now);
+            boolean now = !get.getAsBoolean();
+            set.accept(now);
             sw.set(now);
         });
     }

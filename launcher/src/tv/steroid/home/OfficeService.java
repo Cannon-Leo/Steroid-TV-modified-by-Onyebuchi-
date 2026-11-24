@@ -51,6 +51,8 @@ public class OfficeService extends Service {
         prefs = getSharedPreferences("office", MODE_PRIVATE);
         h.removeCallbacks(tick);
         h.post(tick);
+        ah.removeCallbacks(approvalTick);
+        ah.postDelayed(approvalTick, 3000);
         return START_STICKY;
     }
 
@@ -163,6 +165,142 @@ public class OfficeService extends Service {
         try { ((WindowManager) getSystemService(WINDOW_SERVICE)).removeView(v); } catch (Exception ignored) {}
     }
 
-    @Override public void onDestroy() { h.removeCallbacksAndMessages(null); hide(); super.onDestroy(); }
+    // ---------- Approvals: answer Claude Code permission requests from the remote ----------
+
+    final Handler ah = new Handler(Looper.getMainLooper()); // its own handler: hide() above clears h
+    final java.util.Set<String> handled = new java.util.HashSet<>();
+    Approvals.Request showing;
+    View prompt;
+    volatile boolean checking;
+
+    final Runnable approvalTick = new Runnable() { public void run() {
+        boolean paired = Approvals.anyPaired(OfficeService.this);
+        if (paired && !checking) {
+            checking = true;
+            new Thread(() -> {
+                List<Approvals.Request> l = Approvals.pending(OfficeService.this);
+                ah.post(() -> { checking = false; onRequests(l); });
+            }).start();
+        }
+        ah.postDelayed(this, paired ? 4000 : 20000);
+    }};
+
+    void onRequests(List<Approvals.Request> l) {
+        if (showing != null) {
+            boolean still = false;
+            for (Approvals.Request q : l) still |= q.id.equals(showing.id);
+            if (!still) closePrompt(); // answered at the computer, or timed out there
+            else return;
+        }
+        for (Approvals.Request q : l) if (!handled.contains(q.id)) { showPrompt(q, l.size()); return; }
+    }
+
+    void showPrompt(Approvals.Request q, int waiting) {
+        if (!Settings.canDrawOverlays(this)) return;
+        Ui.init(this);
+        showing = q;
+        handled.add(q.id);
+        final boolean[] approve = {false}; // Reject is selected first: a stray OK never approves
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(Ui.px(28), Ui.px(22), Ui.px(28), Ui.px(22));
+        GradientDrawable bg = Ui.round(0xF2121216, 22);
+        bg.setStroke(Ui.px(1), 0x80E8915A);
+        card.setBackground(bg);
+        LinearLayout top = new LinearLayout(this);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        Icon ic = new Icon(this, Icon.CLAUDE);
+        ic.color(0xFFE8915A);
+        top.addView(ic, new LinearLayout.LayoutParams(Ui.px(20), Ui.px(20)));
+        TextView who = Ui.label(this, "Claude Code asks · " + q.project + " · " + q.computer, 0xCCFFFFFF);
+        who.setPadding(Ui.px(10), 0, 0, 0);
+        top.addView(who, new LinearLayout.LayoutParams(0, -2, 1));
+        if (waiting > 1) top.addView(Ui.label(this, waiting + " waiting", 0xFFFFB454));
+        card.addView(top);
+        TextView title = Ui.text(this, Ui.serif, 24, 0xFFFFFFFF);
+        title.setText(q.summary.isEmpty() ? "Use " + q.tool : q.summary);
+        title.setMaxLines(2);
+        title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        title.setPadding(0, Ui.px(12), 0, Ui.px(6));
+        card.addView(title);
+        if (!q.detail.isEmpty() && !q.summary.endsWith(q.detail)) {
+            TextView d = Ui.text(this, Ui.mono, 13, 0xB3FFFFFF);
+            d.setText(q.detail);
+            d.setMaxLines(3);
+            d.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            d.setPadding(Ui.px(12), Ui.px(8), Ui.px(12), Ui.px(8));
+            d.setBackground(Ui.round(0x14FFFFFF, 10));
+            card.addView(d);
+        }
+        LinearLayout btns = new LinearLayout(this);
+        btns.setPadding(0, Ui.px(16), 0, 0);
+        TextView no = button("Reject"), yes = button("Approve");
+        btns.addView(no, new LinearLayout.LayoutParams(0, Ui.px(48), 1));
+        LinearLayout.LayoutParams yl = new LinearLayout.LayoutParams(0, Ui.px(48), 1);
+        yl.leftMargin = Ui.px(12);
+        btns.addView(yes, yl);
+        card.addView(btns);
+        TextView hint = Ui.text(this, Ui.sans, 12.5f, 0x8CFFFFFF);
+        hint.setText("Left and right to choose, OK to send · Back leaves it for the computer");
+        hint.setPadding(0, Ui.px(10), 0, 0);
+        card.addView(hint);
+        Runnable paint = () -> {
+            ((GradientDrawable) no.getBackground()).setColor(approve[0] ? 0x1AFFFFFF : 0xFFFF6B5A);
+            ((GradientDrawable) yes.getBackground()).setColor(approve[0] ? 0xFF6FD49B : 0x1AFFFFFF);
+            no.setTextColor(approve[0] ? 0xCCFFFFFF : 0xFF140A08);
+            yes.setTextColor(approve[0] ? 0xFF08140C : 0xCCFFFFFF);
+        };
+        paint.run();
+        FrameLayout frame = new FrameLayout(this) {
+            @Override public boolean dispatchKeyEvent(KeyEvent e) {
+                int k = e.getKeyCode();
+                if (e.getAction() != KeyEvent.ACTION_DOWN) return true;
+                if (k == KeyEvent.KEYCODE_DPAD_LEFT || k == KeyEvent.KEYCODE_DPAD_RIGHT) { approve[0] = k == KeyEvent.KEYCODE_DPAD_RIGHT; paint.run(); }
+                else if (k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER || k == KeyEvent.KEYCODE_BUTTON_A) {
+                    boolean a = approve[0];
+                    hint.setText(a ? "Approving…" : "Rejecting…");
+                    new Thread(() -> {
+                        boolean ok = Approvals.decide(OfficeService.this, q, a);
+                        ah.post(() -> {
+                            if (!ok) { hint.setText("Couldn't reach " + q.computer + ". Answer it there."); ah.postDelayed(OfficeService.this::closePrompt, 3000); }
+                            else closePrompt();
+                        });
+                    }).start();
+                } else if (k == KeyEvent.KEYCODE_BACK) closePrompt();
+                return true;
+            }
+        };
+        FrameLayout.LayoutParams cl = new FrameLayout.LayoutParams(Ui.px(560), -2);
+        frame.addView(card, cl);
+        WindowManager.LayoutParams lp = new WindowManager.LayoutParams(-2, -2,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL, PixelFormat.TRANSLUCENT);
+        lp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        lp.y = Ui.px(40);
+        try {
+            ((WindowManager) getSystemService(WINDOW_SERVICE)).addView(frame, lp);
+            prompt = frame;
+            frame.setAlpha(0f);
+            frame.animate().alpha(1f).setDuration(250).start();
+        } catch (Exception e) { prompt = null; showing = null; }
+    }
+
+    TextView button(String label) {
+        TextView b = Ui.text(this, Ui.sansMedium, 16, 0xFFFFFFFF);
+        b.setText(label);
+        b.setGravity(Gravity.CENTER);
+        b.setBackground(Ui.round(0x1AFFFFFF, 14));
+        return b;
+    }
+
+    void closePrompt() {
+        showing = null;
+        if (prompt == null) return;
+        View v = prompt;
+        prompt = null;
+        try { ((WindowManager) getSystemService(WINDOW_SERVICE)).removeView(v); } catch (Exception ignored) {}
+    }
+
+    @Override public void onDestroy() { h.removeCallbacksAndMessages(null); ah.removeCallbacksAndMessages(null); hide(); closePrompt(); super.onDestroy(); }
     @Override public IBinder onBind(Intent i) { return null; }
 }

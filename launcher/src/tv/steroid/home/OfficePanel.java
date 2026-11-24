@@ -53,6 +53,20 @@ public class OfficePanel extends Activity {
         computersRow = new LinearLayout(this);
         computersRow.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
         head.addView(computersRow);
+        // replay the guided tour any time
+        FrameLayout help = new FrameLayout(this);
+        help.setFocusable(true);
+        help.setContentDescription("Tour");
+        GradientDrawable hb = new GradientDrawable();
+        hb.setShape(GradientDrawable.OVAL);
+        hb.setColor(0x26FFFFFF);
+        help.setBackground(hb);
+        help.addView(new Icon(this, Icon.COMPASS), new FrameLayout.LayoutParams(Ui.px(20), Ui.px(20), Gravity.CENTER));
+        Selector.circle(help, false);
+        help.setOnClickListener(v -> startTour());
+        LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(Ui.px(40), Ui.px(40));
+        hl.leftMargin = Ui.px(12);
+        head.addView(help, hl);
         col.addView(head);
 
         body = new LinearLayout(this);
@@ -61,10 +75,45 @@ public class OfficePanel extends Activity {
         col.addView(body);
         scroll.addView(col);
         root.addView(scroll, new FrameLayout.LayoutParams(-1, -1));
-        Selector.attach(this, root);
+        selector = Selector.attach(this, root);
         setContentView(root);
         render();
+        rootView = root;
+        page = scroll;
+        if (!Prefs.on(this, "officeTourDone", false)) h.postDelayed(this::startTour, 1200); // first visit only
     }
+
+    // ---------- Guided tour ----------
+    FrameLayout rootView;
+    ScrollView page;
+    Selector selector;
+    Tour tour;
+
+    void startTour() {
+        if (tour != null || isFinishing()) return;
+        java.util.List<Tour.Step> st = new java.util.ArrayList<>();
+        st.add(new Tour.Step(null, "Little Office", "Your agents, at a glance",
+            "Little Office shows what Claude Code, Codex and Gemini (Antigravity) are doing on your computers. It is read only: only project names, a state and one short sentence come to the TV, and only over your home network."));
+        st.add(new Tour.Step(() -> computersRow, "Computers", "Which computers are answering",
+            "Every Mac or Windows PC running Little Office appears here with a green dot. With two or more, these become a switcher: pick one to see only its agents, or All computers."));
+        st.add(new Tour.Step(() -> body.findViewWithTag("spot"), "Spotlight", "What matters right now",
+            "The agent that needs you comes first, then whatever is working, then the latest finish. Amber means it needs you, green means it's working."));
+        st.add(new Tour.Step(() -> body.findViewWithTag("t_agents"), "Agents", "One card per agent",
+            "How many sessions are working or waiting, or the last thing it did. A faded card means that agent isn't installed on these computers."));
+        st.add(new Tour.Step(() -> body.findViewWithTag("t_lists"), "Lists", "Needs you, and recent activity",
+            "Left: sessions waiting on you. Right: the last few hours, newest first. Move down with the remote to scroll."));
+        st.add(new Tour.Step(() -> body.findViewWithTag("t_approve"), "Approvals", "Answer Claude Code from the sofa",
+            "Pair once with the code shown on your computer. When Claude Code asks permission, a card appears over whatever you're watching: left and right choose, OK sends, Back leaves it for the computer. Reject is picked first, and risky commands always stay at the keyboard."));
+        st.add(new Tour.Step(null, "Notices", "It finds you",
+            "When an agent needs you or finishes, a small notice slides in at the top right. OK opens this screen; any other key dismisses it. The compass at the top replays this tour."));
+        tour = Tour.start(this, rootView, selector, page, st, () -> {
+            tour = null;
+            Prefs.put(this, "officeTourDone", true);
+            h.postDelayed(() -> { View s = body.findViewWithTag("spot"); if (s != null) s.requestFocus(); }, 250);
+        });
+    }
+
+    @Override public void onBackPressed() { if (tour != null) tour.finish(); else super.onBackPressed(); }
 
     static int iconFor(String agent) {
         switch (agent) { case "Claude": return Icon.CLAUDE; case "Codex": return Icon.CODEX; default: return Icon.GEMINI; }
@@ -84,15 +133,18 @@ public class OfficePanel extends Activity {
         // computers answering
         computersRow.removeAllViews();
         List<String> comps = Office.liveComputers();
+        if (Office.device != null && !comps.contains(Office.device)) Office.device = null; // that computer went away
         if (comps.isEmpty()) computersRow.addView(chip(Icon.LAPTOP, live ? "Connected" : Office.lastSeen(this), 0x80FFFFFF));
+        boolean pick = comps.size() > 1; // two or more computers: the chips switch between them
+        if (pick) computersRow.addView(deviceChip(Icon.GRID, "All computers", null));
         for (String c : comps) {
             boolean pc = !c.toLowerCase().contains("mac");
-            computersRow.addView(chip(pc ? Icon.MONITOR : Icon.LAPTOP, c, 0xFF6FD49B));
+            computersRow.addView(pick ? deviceChip(pc ? Icon.MONITOR : Icon.LAPTOP, c, c) : chip(pc ? Icon.MONITOR : Icon.LAPTOP, c, 0xFF6FD49B));
         }
 
         // spotlight: needs you, else working, else most recent
         Office.Session best = null;
-        for (Office.Session s : Office.sessions) if (best == null || Office.rank(s) > Office.rank(best)) best = s;
+        for (Office.Session s : Office.shown()) if (best == null || Office.rank(s) > Office.rank(best)) best = s;
         body.addView(spotlight(best, live));
 
         // one card per agent
@@ -106,6 +158,7 @@ public class OfficePanel extends Activity {
         }
         LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(-1, -2);
         clp.topMargin = Ui.px(22);
+        cards.setTag("t_agents");
         body.addView(cards, clp);
 
         // needs you | recent activity
@@ -113,7 +166,7 @@ public class OfficePanel extends Activity {
         lists.setClipChildren(false);
         LinearLayout left = column("Needs you"), right = column("Recent activity");
         int n1 = 0, n2 = 0;
-        for (Office.Session s : Office.sessions) {
+        for (Office.Session s : Office.shown()) {
             if (live && s.state.equals("needs_you")) { left.addView(row(s, true)); n1++; }
             else if (n2 < 6) { right.addView(row(s, false)); n2++; }
         }
@@ -125,11 +178,34 @@ public class OfficePanel extends Activity {
         lists.addView(right, rlp);
         LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(-1, -2);
         llp.topMargin = Ui.px(26);
+        lists.setTag("t_lists");
         body.addView(lists, llp);
+
+        // approvals from the remote (Claude Code): pair this TV with each computer
+        LinearLayout ap = column("Approve from the TV · Claude Code");
+        if (comps.isEmpty()) ap.addView(quiet("Pair once a computer answers."));
+        for (String comp : comps) ap.addView(pairRow(comp));
+        LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(-1, -2);
+        alp.topMargin = Ui.px(26);
+        ap.setTag("t_approve");
+        body.addView(ap, alp);
 
         View back = focusKey == null ? null : body.findViewWithTag(focusKey);
         if (back != null) back.requestFocus();
         else { View s = body.findViewWithTag("spot"); if (s != null) s.requestFocus(); }
+    }
+
+    /** A computer you can pick: OK shows only that computer's agents and sessions. */
+    View deviceChip(int icon, String text, String device) {
+        boolean on = device == null ? Office.device == null : device.equals(Office.device);
+        View c = chip(icon, text, on ? 0xFF6FD49B : 0x4DFFFFFF);
+        c.setFocusable(true);
+        c.setTag("dev_" + text);
+        c.setAlpha(on ? 1f : 0.72f);
+        Selector.shape(c, Ui.px(18), Ui.px(3));
+        c.setOnFocusChangeListener((v, f) -> v.setAlpha(f || on ? 1f : 0.72f));
+        c.setOnClickListener(v -> { Office.device = device; render(); });
+        return c;
     }
 
     View chip(int icon, String text, int dot) {
@@ -230,7 +306,7 @@ public class OfficePanel extends Activity {
     /** One agent: icon, name, status; lit up while busy. */
     View agentCard(String agent, boolean live) {
         int working = 0, needs = 0;
-        for (Office.Session s : Office.sessions) if (s.agent.equals(agent)) {
+        for (Office.Session s : Office.shown()) if (s.agent.equals(agent)) {
             if (s.state.equals("working")) working++;
             if (s.state.equals("needs_you")) needs++;
         }
@@ -271,7 +347,7 @@ public class OfficePanel extends Activity {
         st.setText(count);
         st.setPadding(0, Ui.px(12), 0, Ui.px(4));
         c.addView(st);
-        String[] info = Office.agents.get(agent);
+        String[] info = Office.info(agent);
         TextView note = Ui.text(this, Ui.sans, 12, 0x99FFFFFF);
         note.setText(busy ? "" : info == null ? "" : info[1] + (info.length > 2 && here ? " · " + info[2] : ""));
         note.setMaxLines(2);
@@ -279,6 +355,90 @@ public class OfficePanel extends Activity {
         c.addView(note);
         return c;
     }
+
+    /** "Pair this TV with MacBook" or "Paired · 83 days left · OK to forget". */
+    View pairRow(String comp) {
+        boolean on = Approvals.paired(this, comp);
+        LinearLayout r = new LinearLayout(this);
+        r.setGravity(Gravity.CENTER_VERTICAL);
+        r.setFocusable(true);
+        r.setTag("pair_" + comp);
+        r.setPadding(Ui.px(16), Ui.px(12), Ui.px(16), Ui.px(12));
+        Glass.apply(r, 16, 0x8C101014);
+        Selector.shape(r, Ui.px(16), Ui.px(3));
+        Icon i = new Icon(this, on ? Icon.CLAUDE : Icon.PLUS);
+        if (on) i.color(0xFFE8915A);
+        r.addView(i, new LinearLayout.LayoutParams(Ui.px(22), Ui.px(22)));
+        LinearLayout t = new LinearLayout(this);
+        t.setOrientation(LinearLayout.VERTICAL);
+        t.setPadding(Ui.px(14), 0, 0, 0);
+        TextView a = Ui.text(this, Ui.sansMedium, 16, 0xFFFFFFFF);
+        a.setText(on ? "Paired with " + comp : "Pair this TV with " + comp);
+        t.addView(a);
+        TextView b = Ui.text(this, Ui.sans, 13, 0xA6FFFFFF);
+        long left = Approvals.daysLeft(this, comp);
+        b.setText(on ? (left <= 7 ? "Expires in " + left + (left == 1 ? " day" : " days") + " · OK to pair again"
+            : left + " days left · requests from Claude Code show here · OK to unpair")
+            : "Approve or reject Claude Code permission requests with the remote");
+        b.setSingleLine(true);
+        b.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        t.addView(b);
+        r.addView(t, new LinearLayout.LayoutParams(0, -2, 1));
+        if (on && left <= 7) b.setTextColor(0xFFFFB454);
+        r.setOnClickListener(v -> { if (on && left > 7) confirmForget(comp); else pickDays(comp); });
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.bottomMargin = Ui.px(10);
+        r.setLayoutParams(lp);
+        return r;
+    }
+
+    void confirmForget(String comp) {
+        new android.app.AlertDialog.Builder(this).setTitle("Unpair " + comp + "?")
+            .setMessage("This TV stops receiving Claude Code requests from " + comp + ". You can pair again any time.")
+            .setPositiveButton("Unpair", (d, w) -> new Thread(() -> { Approvals.forget(this, comp); runOnUiThread(this::render); }).start())
+            .setNegativeButton("Keep", null).show();
+    }
+
+    void pickDays(String comp) {
+        new android.app.AlertDialog.Builder(this).setTitle("Pair with " + comp)
+            .setMessage("An 8 digit code will appear on " + comp + "'s screen; type it here. The pairing lasts 90 days, then this TV asks you to pair again.")
+            .setPositiveButton("Show the code", (d, w) -> startPair(comp, 90))
+            .setNegativeButton("Cancel", null).show();
+    }
+
+    void startPair(String comp, int days) {
+        new Thread(() -> {
+            String err = Approvals.pairStart(this, comp, days);
+            runOnUiThread(() -> { if (err != null) toast(err); else askCode(comp, null); });
+        }).start();
+    }
+
+    void askCode(String comp, String problem) {
+        android.widget.EditText e = new android.widget.EditText(this);
+        e.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        e.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(8)});
+        e.setHint("8 digit code");
+        e.setTextSize(24);
+        e.setPadding(Ui.px(20), Ui.px(12), Ui.px(20), Ui.px(12));
+        new android.app.AlertDialog.Builder(this).setTitle("Code from " + comp)
+            .setMessage(problem != null ? problem : "Look at " + comp + "'s screen. The code works for 3 minutes.")
+            .setView(e)
+            .setPositiveButton("Pair", (d, w) -> {
+                String code = e.getText().toString().trim();
+                new Thread(() -> {
+                    String err = Approvals.pairFinish(this, comp, code);
+                    runOnUiThread(() -> {
+                        if (err == null) { toast("Paired. Claude Code requests from " + comp + " will show on this TV."); render(); }
+                        else if (err.contains("tries left")) askCode(comp, err);
+                        else toast(err);
+                    });
+                }).start();
+            })
+            .setNegativeButton("Cancel", null).show();
+        e.requestFocus();
+    }
+
+    void toast(String s) { android.widget.Toast.makeText(this, s, android.widget.Toast.LENGTH_LONG).show(); }
 
     LinearLayout column(String title) {
         LinearLayout c = new LinearLayout(this);

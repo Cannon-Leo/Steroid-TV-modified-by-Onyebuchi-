@@ -4,5 +4,6 @@
   "radio": true,
   "retroTv": true,
   "worldsWindows": true,
-  "debugWebViews": false
+  "debugWebViews": false,
+  "liveTv": true
 }

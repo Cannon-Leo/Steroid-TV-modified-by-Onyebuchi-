@@ -3,7 +3,8 @@
 
 Serves GET /status on the local network (private addresses only) with, per recent session:
 project, agent, state (working / needs_you / finished / idle) and one short sentence.
-No transcripts, commands, file lists or logs ever leave this Mac.
+No transcripts, file lists or logs ever leave this Mac. With TV approvals on (approvals.sh on), a
+one line summary of a pending permission request goes to paired, signed-in TVs only.
 Edit ~/.little-office/config.json to choose pinned projects:
   {"pinned": ["My App", "Website"],            <- project names as the TV shows them
    "names": {"my-app-folder": "My App"}}       <- optional: folder-name fragment -> display name
@@ -22,6 +23,11 @@ import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from ipaddress import ip_address
+
+import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import schema  # strict input schemas (Zod style)
+import approvals  # remote approvals from the TV (Claude Code), see approvals.py
 
 HOME = os.path.expanduser("~")
 CONFIG = os.path.join(HOME, ".little-office", "config.json")
@@ -400,7 +406,7 @@ def snapshot():
     for s in sessions:
         s.pop("key", None)
     return {"generated_at": now, "pinned": cfg.get("pinned", []), "sessions": sessions, "events": evs,
-            "agents": agents(now), "computer": COMPUTER}
+            "agents": agents(now), "computer": COMPUTER, "approvals": approvals.count()}
 
 
 def watcher():
@@ -412,14 +418,73 @@ def watcher():
         time.sleep(10)
 
 
+class Guard:
+    """Guardrails in front of every request: rate limits, lockouts after bad signatures, host checks."""
+    def __init__(self):
+        self.hits = {}       # (ip, bucket) -> [times]
+        self.blocked = {}    # ip -> until
+        self.lock = threading.Lock()
+
+    def allow(self, ip, bucket, limit, window):
+        now = time.time()
+        with self.lock:
+            if self.blocked.get(ip, 0) > now:
+                return False
+            q = [t for t in self.hits.get((ip, bucket), []) if now - t < window]
+            if len(q) >= limit:
+                self.hits[(ip, bucket)] = q
+                return False
+            q.append(now)
+            self.hits[(ip, bucket)] = q
+            if len(self.hits) > 5000:  # never grow without bound
+                self.hits = {k: v for k, v in self.hits.items() if v and now - v[-1] < 600}
+            return True
+
+    def failed(self, ip):
+        """Count a failed signature; ten in ten minutes blocks that address for fifteen minutes."""
+        if not self.allow(ip, "fail", 10, 600):
+            with self.lock:
+                self.blocked[ip] = time.time() + 900
+            approvals.audit("blocked", ip=ip, why="repeated bad signatures")
+
+
+guard = Guard()
+LOCAL_HOSTS = {"127.0.0.1:8765", "localhost:8765"}
+MAX_BODY = 8192
+
+
 class Handler(BaseHTTPRequestHandler):
-    def do_GET(self):
+    timeout = 10                       # slow or stalled clients are dropped
+    server_version = "LittleOffice"
+    sys_version = ""
+
+    def where(self):
+        ip = self.client_address[0]
         try:
-            private = ip_address(self.client_address[0]).is_private
+            a = ip_address(ip)
+            private = a.is_private or a.is_loopback
         except ValueError:
             private = False
-        path = self.path.split("?")[0]
-        if path == "/test-event" and self.client_address[0] == "127.0.0.1":
+        return ip, ip == "127.0.0.1", private
+
+    def host_ok(self, local):
+        """Refuse requests whose Host is a web domain (DNS rebinding from a browser)."""
+        host = (self.headers.get("Host") or "").lower()
+        if local:
+            return host in LOCAL_HOSTS
+        name = host.rsplit(":", 1)[0].strip("[]")
+        try:
+            ip_address(name)
+            return True
+        except ValueError:
+            return name.endswith(".local") or name == ""
+
+    def do_GET(self):
+        ip, local, private = self.where()
+        path = urllib.parse.urlparse(self.path).path
+        if not private or not self.host_ok(local and path.startswith("/approval/")) or not guard.allow(ip, "all", 240, 60):
+            return self.reply(429 if private else 404, {"error": "refused"})
+        if path == "/test-event" and local:
             # local-only: inject one sample notice to check the TV's notification
             with lock:
                 events.append({"id": int(time.time() * 1000), "at": time.time(), "agent": "Claude",
@@ -427,13 +492,80 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(204)
             self.end_headers()
             return
-        if not private or path != "/status":
-            self.send_error(404)
-            return
-        body = json.dumps(snapshot()).encode()
-        self.send_response(200)
+        if local and path.startswith("/approval/") and path.endswith("/wait"):
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            ok, t = schema.WAIT_SECONDS.safe_parse(int(q.get("t", ["25"])[0]) if q.get("t", ["25"])[0].isdigit() else -1)
+            return self.reply(*approvals.wait(path.split("/")[2], t if ok else 25))
+        if path == "/approvals/count":
+            return self.reply(200, {"n": approvals.count()})
+        if path == "/approvals":
+            if not approvals.verify("GET", path, self.headers, ""):
+                guard.failed(ip)
+                return self.reply(401, {"error": "not paired"})
+            return self.reply(200, {"requests": approvals.listing()})
+        if path != "/status":
+            return self.reply(404, {"error": "not found"})
+        self.reply(200, snapshot())
+
+    def do_POST(self):
+        ip, local, private = self.where()
+        path = urllib.parse.urlparse(self.path).path
+        if not private or not guard.allow(ip, "all", 240, 60):
+            return self.reply(429 if private else 404, {"error": "refused"})
+        hook = local and path.startswith("/approval/")
+        if not self.host_ok(hook):
+            return self.reply(403, {"error": "refused"})
+        # JSON only: a web page can't send this without a preflight we never answer
+        if (self.headers.get("Content-Type") or "").split(";")[0].strip() != "application/json":
+            return self.reply(415, {"error": "json only"})
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            n = -1
+        if n < 0 or n > MAX_BODY:
+            return self.reply(413, {"error": "too large"})
+        text = self.rfile.read(n).decode("utf-8", "replace") if n else ""
+        try:
+            body = json.loads(text) if text else {}
+        except ValueError:
+            return self.reply(400, {"error": "bad json"})
+        if hook and path == "/approval/new":
+            ok, b = schema.HOOK_REQUEST.safe_parse(body)
+            if not ok:
+                return self.reply(400, {"error": "bad request"})
+            return self.reply(*approvals.new_request(b, project_name(b["cwd"], config().get("names", {}))))
+        if hook and path.endswith("/cancel"):
+            return self.reply(*approvals.cancel(path.split("/")[2]))
+        if path == "/pair/start":
+            # pairing pops a dialog on this computer: a few attempts per address, and per computer
+            if not guard.allow(ip, "pair", 4, 600) or not guard.allow("*", "pair", 10, 600):
+                return self.reply(429, {"error": "too many pairing attempts; wait a few minutes"})
+            return self.reply(*approvals.pair_start(body, ip))
+        if path == "/pair/finish":
+            if not guard.allow(ip, "finish", 10, 600):
+                return self.reply(429, {"error": "too many tries"})
+            return self.reply(*approvals.pair_finish(body, ip))
+        device = approvals.verify("POST", path, self.headers, text)
+        if not device:
+            guard.failed(ip)
+            approvals.audit("refused", ip=ip, path=path[:40])
+            return self.reply(401, {"error": "not paired"})
+        if path.startswith("/approvals/") and path.count("/") == 2:
+            return self.reply(*approvals.decide(path.split("/")[2], body, device))
+        if path == "/forget" and schema.EMPTY.safe_parse(body)[0]:
+            return self.reply(*approvals.forget(device))
+        self.reply(404, {"error": "not found"})
+
+    def do_PUT(self): self.reply(405, {"error": "method not allowed"})
+    do_DELETE = do_PATCH = do_OPTIONS = do_HEAD = do_PUT
+
+    def reply(self, code, obj):
+        body = json.dumps(obj).encode()
+        self.send_response(code)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(body)
 
@@ -442,6 +574,8 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    if approvals.cli(sys.argv[1:]):  # office.py devices | office.py revoke <name|all>
+        sys.exit(0)
     if not os.path.exists(CONFIG):
         os.makedirs(os.path.dirname(CONFIG), exist_ok=True)
         with open(CONFIG, "w") as f:

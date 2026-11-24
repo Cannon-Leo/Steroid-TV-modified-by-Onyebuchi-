@@ -90,7 +90,7 @@ class NowPlaying extends FrameLayout {
         t.setOrientation(LinearLayout.VERTICAL);
         t.setPadding(Ui.px(14), 0, Ui.px(8), 0);
         app = Ui.label(c, "", 0xB3FFFFFF);
-        app.setTextSize(9.5f);
+        app.setTextSize(11f);
         title = Ui.text(c, Ui.sansMedium, 14, 0xFFFFFFFF);
         artist = Ui.text(c, Ui.sans, 12, 0xCCFFFFFF);
         for (TextView v : new TextView[]{title, artist}) {
@@ -191,6 +191,7 @@ class NowPlaying extends FrameLayout {
         try { m.getTransportControls().stop(); } catch (Exception ignored) {}
         dismissedKey = sessionKey(m);
         setActive(false);
+        if (pkg.equals(getContext().getPackageName())) return; // our own player just stopped; nothing to free
         h.postDelayed(() -> {
             try { ((ActivityManager) getContext().getSystemService(Context.ACTIVITY_SERVICE)).killBackgroundProcesses(pkg); }
             catch (Exception ignored) {}
@@ -228,7 +229,8 @@ class NowPlaying extends FrameLayout {
         try { list = msm.getActiveSessions(listener); } catch (Exception e) { setActive(false); return; }
         MediaController best = null;
         for (MediaController m : list) {
-            if (m.getPackageName().equals(getContext().getPackageName())) continue; // our radio has its own chip
+            // our radio has its own chip; our background YouTube player shows here like any app
+            if (m.getPackageName().equals(getContext().getPackageName()) && !BgPlayer.TAG.equals(m.getTag())) continue;
             PlaybackState s = m.getPlaybackState();
             if (s == null) continue;
             boolean playing = s.getState() == PlaybackState.STATE_PLAYING;

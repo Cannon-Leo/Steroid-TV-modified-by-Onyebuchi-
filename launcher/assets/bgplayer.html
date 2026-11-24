@@ -1,0 +1,45 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>html,body{margin:0;height:100%;background:#000;overflow:hidden}#p{position:fixed;inset:0;width:100%;height:100%}</style>
+</head><body><div id="p"></div>
+<script>
+// Background player for the home screen's music widget: plays the video you were on from where you
+// left it, then carries on with YouTube's own mix of similar tracks (list RD<id>).
+var a = location.hash.slice(1).split('@'), vid = a[0], at = +(a[1] || 0), player, mixTried = false;
+function onYouTubeIframeAPIReady() {
+  player = new YT.Player('p', {
+    videoId: vid, width: '100%', height: '100%',
+    playerVars: {autoplay: 1, mute: 1, controls: 0, playsinline: 1, rel: 0, iv_load_policy: 3, disablekb: 1, fs: 0,
+                 start: at, list: 'RD' + vid, listType: 'playlist'},
+    events: {
+      onReady: function () { player.playVideo(); },
+      onStateChange: function (e) {
+        if (e.data === 1) { player.unMute(); player.setVolume(100); }
+        report(e.data);
+      },
+      onError: function (e) {
+        // this one can't play outside YouTube: skip to the next in the mix, or tell the TV
+        if (player.getPlaylist && player.getPlaylist() && player.getPlaylistIndex() < player.getPlaylist().length - 1) player.nextVideo();
+        else Native.error(e.data);
+      }
+    }
+  });
+  setInterval(function () { report(player && player.getPlayerState ? player.getPlayerState() : -1); }, 1000);
+}
+function report(s) {
+  if (!player || !player.getVideoData) return;
+  var d = player.getVideoData() || {};
+  Native.tick(s, d.video_id || vid, d.title || '', d.author || '',
+              Math.floor((player.getCurrentTime() || 0) * 1000), Math.floor((player.getDuration() || 0) * 1000));
+}
+function cmd(c, v) {
+  if (!player) return;
+  if (c === 'play') player.playVideo();
+  else if (c === 'pause') player.pauseVideo();
+  else if (c === 'next') player.nextVideo();
+  else if (c === 'prev') { if (player.getCurrentTime() > 5) player.seekTo(0, true); else player.previousVideo(); }
+  else if (c === 'seek') player.seekTo(v / 1000, true);
+}
+</script>
+<script src="https://www.youtube.com/iframe_api"></script>
+</body></html>

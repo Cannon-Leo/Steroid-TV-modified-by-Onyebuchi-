@@ -29,15 +29,20 @@ class Selector extends View {
     /** The ring traces this child instead of the focused view (for cards where only the picture zooms). */
     static final WeakHashMap<View, View> VISUAL = new WeakHashMap<>();
     static void visual(View focusable, View shown, float radiusPx) { VISUAL.put(focusable, shown); shape(shown, radiusPx, false); }
+    /** Same, with the ring sitting gapPx outside the shown view (1px: the ring hugs the zoomed picture). */
+    static void visual(View focusable, View shown, float radiusPx, float gapPx) { VISUAL.put(focusable, shown); shape(shown, radiusPx, gapPx); }
 
     static Selector attach(Activity a, FrameLayout root) {
         Selector s = new Selector(a);
         root.addView(s, new FrameLayout.LayoutParams(-1, -1));
         root.getViewTreeObserver().addOnGlobalFocusChangeListener((o, n) -> s.kick());
         root.getViewTreeObserver().addOnScrollChangedListener(s::kick);
+        // layout changes (a card swapped, a row rebuilt) move items without a focus change: follow them
+        root.getViewTreeObserver().addOnGlobalLayoutListener(s::relayout);
         return s;
     }
 
+    static float gap() { return Ui.px(4); } // a method: Ui.dp is set per screen
     final Paint ring = new Paint(Paint.ANTI_ALIAS_FLAG);
     final RectF cur = new RectF(), want = new RectF();
     final int[] loc = new int[2], mine = new int[2];
@@ -53,6 +58,18 @@ class Selector extends View {
         ring.setStyle(Paint.Style.STROKE);
         ring.setStrokeWidth(Ui.px(2.5f));
         ring.setColor(0xFFFFFFFF);
+    }
+
+    /** After a layout pass: only wake up if the focused item actually moved (cheap check). */
+    final RectF probe = new RectF();
+    void relayout() {
+        View f = getRootView().findFocus();
+        if (f == null || !placed) return;
+        RectF old = new RectF(want);
+        float oldR = wantR;
+        if (target(f) && (Math.abs(want.left - cur.left) + Math.abs(want.top - cur.top) + Math.abs(want.right - cur.right)
+            + Math.abs(want.bottom - cur.bottom) > 0.6f)) kick();
+        else { want.set(old); wantR = oldR; }
     }
 
     void kick() { busyUntil = SystemClock.uptimeMillis() + 720; postInvalidateOnAnimation(); }
@@ -82,7 +99,7 @@ class Selector extends View {
         long st = SystemClock.uptimeMillis() - sweepAt;
         if (show && st >= 0 && st < SWEEP_MS) {
             float t = st / (float) SWEEP_MS;
-            float gap = Ui.px(5), w = cur.width(), x = cur.left - w * 0.4f + (w * 1.8f) * t;
+            float gap = gap(), w = cur.width(), x = cur.left - w * 0.4f + (w * 1.8f) * t;
             clip.reset();
             float r0 = Math.max(0, Math.min(curR, Math.min(cur.width(), cur.height()) / 2) - gap);
             clip.addRoundRect(cur.left + gap, cur.top + gap, cur.right - gap, cur.bottom - gap, r0, r0, android.graphics.Path.Direction.CW);
@@ -132,7 +149,9 @@ class Selector extends View {
             }
         }
         if (!flush) {
-            float gap = gapOverride > 0 ? gapOverride : Ui.px(5);
+            // one gap everywhere, so the ring hugs every card, button and chip the same way;
+            // a smaller gap is allowed (pictures that zoom up to the ring), never a larger one
+            float gap = gapOverride > 0 ? Math.min(gapOverride, gap()) : gap();
             want.inset(-gap, -gap);
             if (r >= 0) r += gap;
         }

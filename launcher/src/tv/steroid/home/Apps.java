@@ -105,7 +105,7 @@ final class Apps {
         ImageView icon = new ImageView(ctx);
         icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
         tile.addView(icon, new LinearLayout.LayoutParams(Ui.px(40), Ui.px(40)));
-        TextView name = Ui.text(ctx, Ui.sansMedium, 11, 0xFFFFFFFF);
+        TextView name = Ui.text(ctx, Ui.sansMedium, 12.5f, 0xFFFFFFFF);
         name.setShadowLayer(Ui.px(4), 0, Ui.px(1), 0xCC000000);
         name.setText(a.label);
         name.setSingleLine(true);

@@ -106,15 +106,19 @@ public class Retro extends Activity {
             }
             @Override public void onHideCustomView() { dropFull(); }
         });
+        s.setCacheMode(WebSettings.LOAD_DEFAULT); // pages and scripts come from cache after the first visit
         web.setWebViewClient(new WebViewClient() {
-            @Override public void onPageFinished(WebView v, String url) {
-                // Channel changes rewrite the URL hash and re-fire this; boot the set once per load.
-                if (!url.contains("myretrotvs.com") || booted) return;
-                booted = true;
-                v.evaluateJavascript(WATCH, null);
-                h.postDelayed(() -> js(key(32)), 1500);                    // power on
-                h.postDelayed(() -> { applyFilter(); js(key(39)); }, 2500);
-                h.postDelayed(Retro.this::ensurePower, 9000);
+            @Override public void onPageStarted(WebView v, String url, android.graphics.Bitmap icon) {
+                // Don't wait for every ad and tracker to finish (the '00s and '10s pages carry many):
+                // boot as soon as the page's own player is in the DOM.
+                if (url.contains("myretrotvs.com")) { h.removeCallbacks(readyPoll); h.postDelayed(readyPoll, 700); }
+            }
+            @Override public void onPageFinished(WebView v, String url) { boot(); }
+            @Override public android.webkit.WebResourceResponse shouldInterceptRequest(WebView v, android.webkit.WebResourceRequest r) {
+                String host = r.getUrl().getHost();
+                if (host != null && blocked(host)) // ads and analytics only slow the set down
+                    return new android.webkit.WebResourceResponse("text/plain", "utf-8", new java.io.ByteArrayInputStream(new byte[0]));
+                return null;
             }
             @Override public boolean shouldOverrideUrlLoading(WebView v, String url) {
                 return !url.contains("myretrotvs.com");
@@ -155,6 +159,30 @@ public class Retro extends Activity {
         category = ((category % Lineup.CATEGORIES.length) + Lineup.CATEGORIES.length) % Lineup.CATEGORIES.length;
         int n = science() ? Lineup.channels(decade, SCIENCE).length : 1;
         channel = ((channel % n) + n) % n;
+    }
+
+    static final String[] BLOCK = {"doubleclick", "googlesyndication", "googletagmanager", "google-analytics",
+        "adservice", "amazon-adsystem", "adnxs", "taboola", "outbrain", "facebook.net", "scorecardresearch",
+        "hotjar", "quantserve", "criteo", "pubmatic", "rubiconproject", "adsafeprotected", "moatads"};
+    static boolean blocked(String host) { for (String b : BLOCK) if (host.contains(b)) return true; return false; }
+
+    final Runnable readyPoll = new Runnable() { public void run() {
+        if (booted || !loaded.contains("myretrotvs.com")) return;
+        web.evaluateJavascript("(document.readyState!='loading')&&!!document.getElementById('filter_none')", v -> {
+            if ("true".equals(v)) boot(); else h.postDelayed(readyPoll, 400);
+        });
+    }};
+
+    /** Boot the set once per load (channel changes rewrite the hash and re-fire page events). */
+    void boot() {
+        String u = web.getUrl();
+        if (booted || u == null || !u.contains("myretrotvs.com")) return;
+        booted = true;
+        h.removeCallbacks(readyPoll);
+        web.evaluateJavascript(WATCH, null);
+        h.postDelayed(() -> js(key(32)), 1500);                    // power on
+        h.postDelayed(() -> { applyFilter(); js(key(39)); }, 2500);
+        h.postDelayed(Retro.this::ensurePower, 9000);
     }
 
     /** dir: -1 previous channel, +1 next, 0 retune after a decade/category change. */

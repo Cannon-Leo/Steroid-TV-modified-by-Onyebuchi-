@@ -31,7 +31,9 @@ final class Glass extends Drawable {
     /** Put glass behind a view. radiusDp < 0 means a circle. */
     static Glass apply(View v, float radiusDp, int tintColor) {
         Glass g = new Glass(v, radiusDp, tintColor);
-        g.useFrost = v.getContext() instanceof Home; // only the home screen shows the photo behind
+        boolean glass = Prefs.glassPanels(v.getContext());
+        g.useFrost = glass && v.getContext() instanceof Home; // only the home screen shows the photo behind
+        if (!glass) g.tint(0xF0141418); // solid panels: same shape, no photo through them
         v.setBackground(g);
         owners.add(v);
         return g;

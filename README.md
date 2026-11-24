@@ -65,13 +65,26 @@ from an **Intel MacBook Pro** without Homebrew. Changes were made with Claude as
 - **System widget:** RAM, storage, CPU clock and network speed, each with its icon.
 - **Recent apps** screen: open or close recent apps, or Close all.
 
+### First time tour
+A guided tour on first launch (and on the first visit to Little Office): the screen dims, a spotlight glides
+to each part with a short note on using it with the remote, and some steps let you try the thing for real.
+Skip any time; replay it from the **Take the tour** card at the end of the home screen, the Control
+centre, or the compass in Little Office.
+
 ### Settings
 - A redesigned settings page (grouped cards, Lucide icons, real switches): your name, photo slideshow,
   slow zoom, how often photos change, **Arrange home** (move sections, sizes S / M / L, show or hide), and
-  hidden apps.
+  hidden apps, and header options (clock, seconds, date, year, greeting, system card, glass or solid).
+- **Control centre** (the gear): round toggles that light up when on (Wi‑Fi, Bluetooth, Mute,
+  Screensaver; hold OK for their settings), a tall volume slider (up and down), shortcuts (Display,
+  Recents, Apps, Date & time), then launcher and system options. It scrolls, and glass or solid is one switch.
 
 ### Features of the original, extended
-- **Retro TV:** added the **'60s** and **'70s** next to the '80s to '10s.
+- **Retro TV:** added the **'60s** and **'70s** next to the '80s to '10s; the '00s and '10s start faster
+  (ads and trackers blocked, the set boots as soon as its player loads, pages cached).
+- **Live TV (new):** official 24 hour streams from each channel's own YouTube: Channels TV, Arise News,
+  Al Jazeera, DW, France 24, Sky News, Bloomberg, Euronews and NASA. Up and down change channel, OK opens
+  the guide. The current stream is looked up on each tune, so a channel that restarts its stream still works.
 - **Radio:** **+ Add station** (name and stream link), saved on the TV.
 - **The World's Windows:** grid fixed so cards in the edge columns are never cut; shared focus ring.
 - **Little Office:**
@@ -196,6 +209,47 @@ list in `~/.gemini/antigravity/conversation_summaries.db`. Claude sessions that 
 Claude app) leave nothing on the computer, so the card says the app is open but cannot show their status.
 Run Claude Code in a terminal to get full status.
 
+### Keep YouTube playing
+
+Press Home while YouTube or YouTube Music plays: the same track carries on from the same second in the
+music widget, then continues with YouTube's mix of similar tracks. Play, pause, next, previous and close
+work from the widget; Open goes back into the app at the current track. Turn it off in Launcher settings
+(**Keep YouTube playing**).
+
+### Approve Claude Code requests from the TV
+
+When Claude Code (in a terminal on the computer) is about to ask permission, the TV shows the request:
+project, computer, a one line summary and **Reject** / **Approve**. Left and right choose, OK sends,
+Back leaves it for the computer.
+
+1. On the Mac: `little-office/approvals.sh on` (adds a `PermissionRequest` hook to `~/.claude/settings.json`,
+   with a backup). `approvals.sh off` removes it.
+2. On the TV: **Little Office → Approve from the TV → Pair this TV with …**, then type the 8 digit code that
+   appears on the computer's screen. A pairing lasts 90 days; the TV warns you a week before and pairs again
+   in one step.
+
+Security: the code never crosses the network (the TV proves it with an HMAC and receives its token
+encrypted with it); 3 wrong codes end the attempt; every TV request is signed, time stamped and single use;
+private network only; tokens expire after 90 days.
+
+Guardrails on the computer:
+- **Strict schemas** (Zod style, `little-office/schema.py`) for every body, header, id and query value:
+  unknown fields, wrong types, bad lengths or formats are refused, nothing is coerced.
+- **Rate limits** per address; pairing at most 4 tries per address and 10 per computer every 10 minutes;
+  10 bad signatures in 10 minutes block that address for 15 minutes.
+- JSON only, bodies capped at 8 KB, 10 second socket timeout, unknown methods refused.
+- **Host checks** stop browser tricks (DNS rebinding) from reaching the service through a web page.
+- One pairing at a time, at most 5 paired TVs, at most 20 waiting requests.
+- **Audit log** at `~/.little-office/audit.log`: pairings, unpairings, every decision and every refusal.
+- The TV checks everything it receives too: malformed ids and tokens are dropped, text is cut to size. `python3 ~/.little-office/office.py devices` lists
+paired TVs and `office.py revoke all` removes them.
+
+Safe by default: Reject is selected first; if the TV doesn't answer within 4 minutes the normal prompt
+appears on the computer; commands like `sudo`, `rm -rf`, forced pushes, piping into a shell or touching
+`.env` and `~/.ssh` are never sent to the TV and are always decided at the keyboard.
+
+Codex and Antigravity have no permission hook, so they can only notify the TV, not be approved from it.
+
 ---
 
 ## Your photos and profile picture
@@ -242,6 +296,9 @@ Every issue below actually happened while building this, and each has its fix.
 ## Honest limits
 
 - A launcher cannot remove ads inside apps (YouTube, Prime...).
+- YouTube and YouTube Music stop their own player when you leave them. The launcher carries the track on
+  in its own background player (YouTube's official embedded player), so YouTube may play its own ads there,
+  and a few tracks whose owners block embedding can't continue (the Resume card brings you back to them).
 - Android TV 11 cannot blur live, so glass is blurred once per photo (cheap, but it does not follow motion).
 - Recommendations ("For you") are not available to launchers that are not part of the system; only your
   own play history is.

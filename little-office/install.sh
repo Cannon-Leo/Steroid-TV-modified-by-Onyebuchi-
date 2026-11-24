@@ -5,7 +5,7 @@
 set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
 D="$HOME/.little-office"; mkdir -p "$D"
-cp "$HERE/office.py" "$D/office.py"
+cp "$HERE/office.py" "$HERE/approvals.py" "$HERE/schema.py" "$HERE/approve_hook.py" "$D/"
 PY=/opt/homebrew/bin/python3; [ -x "$PY" ] || PY="$(command -v python3)"
 if [ $# -gt 0 ] || [ ! -f "$D/config.json" ]; then
   "$PY" - "$D/config.json" "$@" <<'P'

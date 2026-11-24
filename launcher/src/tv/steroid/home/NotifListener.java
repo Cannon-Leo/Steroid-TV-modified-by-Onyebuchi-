@@ -43,11 +43,39 @@ public class NotifListener extends NotificationListenerService {
         for (MediaController m : list) {
             m.registerCallback(cb(m), h);
             watched.add(m);
-            History.record(this, m);
+            if (!BgPlayer.TAG.equals(m.getTag())) History.record(this, m);
+        }
+        // a YouTube session that was playing has gone away: same as it stopping
+        for (String k : new java.util.ArrayList<>(playingYt.keySet())) {
+            boolean still = false;
+            for (MediaController m : list) still |= m.getSessionToken().toString().equals(k);
+            if (!still) { long[] p = playingYt.remove(k); String[] i = ytInfo.remove(k); if (i != null) BgPlayer.stopped(this, i[0], i[1], i[2], i[3], estimate(p)); }
         }
     }
 
     final java.util.Map<String, MediaController.Callback> cbs = new java.util.HashMap<>();
+    /** YouTube sessions playing right now: token -> {position ms, at (elapsedRealtime)}, and {pkg, id, title, artist}. */
+    final java.util.Map<String, long[]> playingYt = new java.util.HashMap<>();
+    final java.util.Map<String, String[]> ytInfo = new java.util.HashMap<>();
+
+    static long estimate(long[] p) { return p == null ? 0 : p[0] + Math.max(0, android.os.SystemClock.elapsedRealtime() - p[1]); }
+
+    void trackYt(MediaController m, PlaybackState s) {
+        if (!BgPlayer.isYouTube(m.getPackageName())) return;
+        String k = m.getSessionToken().toString();
+        MediaMetadata md = m.getMetadata();
+        boolean playing = s != null && s.getState() == PlaybackState.STATE_PLAYING;
+        if (playing) {
+            playingYt.put(k, new long[]{s.getPosition(), s.getLastPositionUpdateTime()});
+            ytInfo.put(k, new String[]{m.getPackageName(), md == null ? null : md.getString(MediaMetadata.METADATA_KEY_MEDIA_ID),
+                md == null ? "" : md.getString(MediaMetadata.METADATA_KEY_TITLE), md == null ? "" : md.getString(MediaMetadata.METADATA_KEY_ARTIST)});
+        } else if (playingYt.containsKey(k)) {
+            long[] p = playingYt.remove(k);
+            String[] i = ytInfo.remove(k);
+            long pos = s != null && s.getPosition() > 0 ? s.getPosition() : estimate(p);
+            if (i != null) BgPlayer.stopped(this, i[0], i[1], i[2], i[3], pos);
+        }
+    }
 
     MediaController.Callback cb(MediaController m) {
         String k = m.getSessionToken().toString();
@@ -59,10 +87,16 @@ public class NotifListener extends NotificationListenerService {
                 // only write when playback starts or the title changes (not on every progress tick)
                 @Override public void onPlaybackStateChanged(PlaybackState s) {
                     int st = s == null ? -1 : s.getState();
+                    trackYt(m, s);
+                    // anything else starting to play: our background player steps aside
+                    if (st == PlaybackState.STATE_PLAYING && !BgPlayer.TAG.equals(m.getTag())) BgPlayer.otherPlaying();
+                    if (BgPlayer.TAG.equals(m.getTag())) { lastState = st; return; }
                     if (st == PlaybackState.STATE_PLAYING && lastState != PlaybackState.STATE_PLAYING) History.record(NotifListener.this, m);
                     lastState = st;
                 }
                 @Override public void onMetadataChanged(MediaMetadata md) {
+                    if (BgPlayer.TAG.equals(m.getTag())) return;
+                    trackYt(m, m.getPlaybackState());
                     String t = md == null ? "" : String.valueOf(md.getString(MediaMetadata.METADATA_KEY_TITLE));
                     if (t.equals(lastTitle)) return;
                     lastTitle = t;

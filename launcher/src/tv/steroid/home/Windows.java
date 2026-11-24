@@ -207,7 +207,7 @@ public class Windows extends Activity {
         name.setPadding(Ui.px(2), Ui.px(10), 0, Ui.px(4));
         c.addView(name);
         TextView where = Ui.label(this, Places.where(i) + " · " + localTime(i), 0x99FFFFFF);
-        where.setTextSize(9.5f);
+        where.setTextSize(11f);
         where.setSingleLine(true);
         where.setEllipsize(android.text.TextUtils.TruncateAt.END);
         where.setPadding(Ui.px(2), 0, 0, 0);
@@ -218,13 +218,15 @@ public class Windows extends Activity {
         lp.setMargins(0, Ui.px(8), Ui.px(16), Ui.px(14));
         c.setLayoutParams(lp);
         c.setOnFocusChangeListener((v, f) -> {
-            Ui.lift(art, f, 1.07f);
-            rd.setStroke(Ui.px(1), f ? 0x33FFFFFF : 0x1FFFFFFF);
+            Ui.lift(art, f, 1.09f);
+            // the focus ring alone marks focus: no second border
             if (f) ambient.tint(moodHue(i));
         });
         c.setOnClickListener(v -> open(i));
         c.setTag(i);
-        Selector.visual(c, art, Ui.px(14)); // the ring follows the zooming picture, so it never cuts across it
+        // every card: the picture zooms out to fill the ring's padding, so the ring sits on the image edge
+        // (no dark band between ring and photo, which read as a cut on the left column)
+        Selector.visual(c, art, Ui.px(14), Ui.px(1.5f));
         return c;
     }
 
@@ -308,7 +310,7 @@ public class Windows extends Activity {
         vNote.setPadding(0, Ui.px(10), 0, 0);
         info.addView(vNote);
         vSource = Ui.label(this, "", 0x80FFFFFF);
-        vSource.setTextSize(9.5f);
+        vSource.setTextSize(11f);
         vSource.setPadding(0, Ui.px(10), 0, 0);
         info.addView(vSource);
         FrameLayout.LayoutParams il = new FrameLayout.LayoutParams(Ui.px(420), -2, Gravity.BOTTOM | Gravity.START);

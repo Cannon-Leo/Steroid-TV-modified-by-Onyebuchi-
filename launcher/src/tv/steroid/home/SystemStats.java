@@ -24,9 +24,15 @@ class SystemStats extends LinearLayout {
     final TextView ram, disk, cpu, temp, net;
     long lastRx = -1, lastTx, lastAt;
 
+    /** Same height as the music cards beside it, so the row lines up. */
+    @Override protected void onMeasure(int w, int h) {
+        super.onMeasure(w, MeasureSpec.makeMeasureSpec(Ui.px(NowPlaying.H), MeasureSpec.EXACTLY));
+    }
+
     SystemStats(Context c) {
         super(c);
         setOrientation(VERTICAL);
+        setGravity(Gravity.CENTER_VERTICAL);
         setPadding(Ui.px(14), Ui.px(10), Ui.px(16), Ui.px(10));
         Glass.apply(this, 18, 0x99101014); // frosted glass
         ram = row(Icon.RAM, "RAM");

@@ -37,6 +37,11 @@ final class Office {
     static List<String> pinned = new ArrayList<>();
     /** agent -> {installed 1/0, note, computer}: merged across every computer that answers. */
     static java.util.Map<String, String[]> agents = new java.util.LinkedHashMap<>();
+    /** computer -> (agent -> {installed, note, computer}): each computer's own view, for the device switcher. */
+    static java.util.Map<String, java.util.Map<String, String[]>> agentsBy = new java.util.LinkedHashMap<>();
+    /** computer name -> {host, port} it last answered from; and how many approvals it has waiting. */
+    static final java.util.Map<String, String[]> addr = new java.util.concurrent.ConcurrentHashMap<>();
+    static final java.util.Map<String, Integer> approvalsWaiting = new java.util.concurrent.ConcurrentHashMap<>();
     /** computer name -> last time it answered (ms). */
     static java.util.Map<String, Long> computers = new java.util.LinkedHashMap<>();
     static long lastOk;      // TV clock, ms
@@ -111,6 +116,7 @@ final class Office {
         List<Event> es = new ArrayList<>();
         List<String> pins = new ArrayList<>();
         java.util.Map<String, String[]> ag = new java.util.LinkedHashMap<>();
+        java.util.Map<String, java.util.Map<String, String[]>> by = new java.util.LinkedHashMap<>();
         boolean any = false;
         for (String[] t : targets) {
             JSONObject o = fetch(t[1], t[2]);
@@ -119,6 +125,8 @@ final class Office {
             String comp = o.optString("computer", t[0].replace("Little Office", "").trim());
             if (comp.isEmpty()) comp = "Computer";
             computers.put(comp, System.currentTimeMillis());
+            addr.put(comp, new String[]{t[1], t[2]});
+            approvalsWaiting.put(comp, o.optInt("approvals", 0));
             double now = o.optDouble("generated_at");
             macNow = now;
             try {
@@ -147,6 +155,8 @@ final class Office {
                     JSONObject x = aa.getJSONObject(i);
                     String name = x.optString("name");
                     boolean inst = x.optBoolean("installed");
+                    by.computeIfAbsent(comp, k -> new java.util.LinkedHashMap<>())
+                        .put(name, new String[]{inst ? "1" : "0", x.optString("note"), comp});
                     String[] prev = ag.get(name);
                     // an agent that exists on any computer counts; keep the note from where it exists
                     if (prev == null || ("0".equals(prev[0]) && inst))
@@ -157,6 +167,7 @@ final class Office {
         if (!any) return false;
         java.util.Collections.sort(ss, (x, y) -> Long.compare(x.ageSec, y.ageSec));
         agents = ag;
+        agentsBy = by;
         sessions = ss; events = es; pinned = pins;
         lastOk = System.currentTimeMillis();
         everConnected = true;
@@ -206,24 +217,40 @@ final class Office {
     static List<String> order() {
         List<String> a = new ArrayList<>(), b = new ArrayList<>();
         for (String n : new String[]{"Gemini", "Claude", "Codex"}) {
-            String[] i = agents.get(n);
+            String[] i = info(n);
             (i == null || "1".equals(i[0]) ? a : b).add(n);
         }
         a.addAll(b);
         return a;
     }
 
-    static boolean installed(String agent) { String[] i = agents.get(agent); return i == null || "1".equals(i[0]); }
+    static boolean installed(String agent) { String[] i = info(agent); return i == null || "1".equals(i[0]); }
+
+    /** The computer picked in Little Office (null: all computers together). */
+    static String device;
+
+    static String[] info(String agent) {
+        java.util.Map<String, String[]> m = device == null ? null : agentsBy.get(device);
+        return m != null ? m.get(agent) : agents.get(agent);
+    }
+
+    /** Sessions on the picked computer, or on all of them. */
+    static List<Session> shown() {
+        if (device == null) return sessions;
+        List<Session> l = new ArrayList<>();
+        for (Session s : sessions) if (device.equals(s.computer)) l.add(s);
+        return l;
+    }
 
     /** "Codex · 2 working · 1 needs you", "Gemini · Last: … · 13 h ago" or "Codex · Not on this computer". */
     static String line(String agent) {
         int working = 0, needs = 0;
-        for (Session s : sessions) if (s.agent.equals(agent)) {
+        for (Session s : shown()) if (s.agent.equals(agent)) {
             if (s.state.equals("working")) working++;
             if (s.state.equals("needs_you")) needs++;
         }
         StringBuilder b = new StringBuilder(agent);
-        String[] info = agents.get(agent);
+        String[] info = info(agent);
         if (working == 0 && needs == 0) {
             if (info != null && !info[1].isEmpty()) return b.append(" · ").append(info[1]).toString();
             return b.append(" · All quiet").toString();
