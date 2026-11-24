@@ -243,10 +243,14 @@ approve its actions, so TV approvals stay Claude Code only.
 
 ### Screensaver
 
-**Steroid photos** plays the same slideshow (your photos woven through the free photos and views) at full
-brightness and colour, with a small clock that shifts a little every minute. Fully offline. Turn it on with
-`scripts/buchi.sh screensaver`, or Settings, Device Preferences, Screen saver. Google's Backdrop can't take
-your photos: Google decides what it shows.
+**Steroid photos**, in the style of a HyperOS lock screen: your photos woven through the free photos and
+views at full colour, the date and **weather** (Open-Meteo, no account; place from your internet address or
+Launcher settings, Weather place) over a large clock, and the **depth effect**: on photos with a clear
+subject, the subject stands in front of the clock. Depth masks are made on the computer by
+`little-office/depth.py` (rembg, once: `pip3 install "rembg[cpu]"`), automatically by `buchi.sh myphotos`,
+only for photos where the subject is solid and leaves the time readable. Turn depth off in Launcher
+settings, Background. The clock shifts a few pixels each minute (no burn in). Turn it on with
+`scripts/buchi.sh screensaver`. Google's Backdrop can't take your photos: Google decides what it shows.
 
 ### Something not reaching the TV?
 

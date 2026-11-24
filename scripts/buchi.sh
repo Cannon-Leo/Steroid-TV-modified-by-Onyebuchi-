@@ -89,6 +89,9 @@ case "$1" in
       echo "System Settings > Privacy & Security > Files and Folders > Terminal > turn on Downloads Folder, then run this again."
       exit 1
     fi
+    # depth effect masks for the screensaver (needs rembg once: pip3 install "rembg[cpu]")
+    if "$PY" -c "import rembg" 2>/dev/null; then "$PY" little-office/depth.py "$L"
+    else echo "Depth effect: skipped (run once: pip3 install \"rembg[cpu]\", then myphotos again)"; fi
     "$PY" - "$L" "$(cat personal/name 2>/dev/null)" <<'P'
 import json, os, sys
 p = os.path.expanduser("~/.little-office/config.json")

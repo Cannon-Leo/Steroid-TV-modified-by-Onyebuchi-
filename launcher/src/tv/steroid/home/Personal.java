@@ -88,6 +88,28 @@ public class Personal extends Activity {
         switchRow(bgGroup, Icon.IMAGE, "Photo slideshow", "Your photos and the World's Windows views behind the home screen", "photos");
         switchRow(bgGroup, Icon.IMAGE, "Free landscape photos", "50 free to use photos (Unsplash licence) mixed in with yours", "freePhotos");
         switchRow(bgGroup, Icon.ZOOM, "Slow zoom", "Turn off for the lightest setting", "drift");
+        switchRow(bgGroup, Icon.IMAGE, "Depth effect in the screensaver", "Your photo's subject stands in front of the clock (photos with a mask)", "depth");
+        LinearLayout wRow = row(bgGroup, Icon.CLOUD_SUN, "Weather place", "For the screensaver; empty finds it from your internet address");
+        String wc = Prefs.sp(this).getString("weatherCity", "");
+        TextView wb = pillButton(wRow, wc.isEmpty() ? "Automatic" : wc);
+        wb.setOnClickListener(v -> {
+            android.widget.EditText e = new android.widget.EditText(this);
+            e.setSingleLine(true);
+            e.setText(Prefs.sp(this).getString("weatherCity", ""));
+            e.setHint("City, for example Uyo");
+            new android.app.AlertDialog.Builder(this).setTitle("Weather place").setView(e)
+                .setPositiveButton("Save", (d, w) -> {
+                    String t = e.getText().toString().trim();
+                    Prefs.sp(this).edit().putString("weatherCity", t.length() > 60 ? t.substring(0, 60) : t).apply();
+                    Weather.at = 0; getSharedPreferences("weather", MODE_PRIVATE).edit().putLong("at", 0).apply(); // fetch again
+                    wb.setText(t.isEmpty() ? "Automatic" : t);
+                })
+                .setNegativeButton("Automatic", (d, w) -> {
+                    Prefs.sp(this).edit().putString("weatherCity", "").apply();
+                    Weather.at = 0; getSharedPreferences("weather", MODE_PRIVATE).edit().putLong("at", 0).apply();
+                    wb.setText("Automatic");
+                }).show();
+        });
         LinearLayout ivRow = row(bgGroup, Icon.TIMER, "Change photo every", "How long each photo stays");
         TextView iv = pillButton(ivRow, Prefs.interval(this) + " s");
         iv.setOnClickListener(v -> {

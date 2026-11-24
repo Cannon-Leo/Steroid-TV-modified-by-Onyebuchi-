@@ -16,7 +16,8 @@ class Icon extends ImageView {
         CLAUDE = 30, CODEX = 31, GEMINI = 32, LAPTOP = 33, MONITOR = 34,
         SWAP = 35, MUSIC = 36, OPEN = 37,
         MUTE = 38, MOON = 39, WIFI_OFF = 40, BT_OFF = 41, COMPASS = 42, SHIELD = 43,
-        ELLIPSIS = 44, SUN_DIM = 45, BELL_OFF = 46, CAST = 47, CONTRAST = 48, BELL = 49, CHECK = 50;
+        ELLIPSIS = 44, SUN_DIM = 45, BELL_OFF = 46, CAST = 47, CONTRAST = 48, BELL = 49, CHECK = 50,
+        SUN = 51, CLOUD = 52, CLOUD_SUN = 53, CLOUD_MOON = 54, CLOUD_FOG = 55, CLOUD_RAIN = 56, CLOUD_LIGHTNING = 57, SNOWFLAKE = 58;
     static final int[] RES = {R.drawable.lu_mic, R.drawable.lu_wifi, R.drawable.lu_bluetooth, R.drawable.lu_settings,
         R.drawable.lu_volume_2, R.drawable.lu_skip_back, R.drawable.lu_play, R.drawable.lu_pause,
         R.drawable.lu_skip_forward, R.drawable.lu_x, R.drawable.lu_plus, R.drawable.lu_tv, R.drawable.lu_sparkles,
@@ -27,7 +28,9 @@ class Icon extends ImageView {
         R.drawable.lu_asterisk, R.drawable.lu_code_xml, R.drawable.lu_sparkle, R.drawable.lu_laptop, R.drawable.lu_monitor,
         R.drawable.lu_arrow_left_right, R.drawable.lu_music, R.drawable.lu_external_link, R.drawable.lu_volume_x, R.drawable.lu_moon, R.drawable.lu_wifi_off,
         R.drawable.lu_bluetooth_off, R.drawable.lu_compass, R.drawable.lu_shield_check,
-        R.drawable.lu_ellipsis, R.drawable.lu_sun_dim, R.drawable.lu_bell_off, R.drawable.lu_cast, R.drawable.lu_contrast, R.drawable.lu_bell, R.drawable.lu_check};
+        R.drawable.lu_ellipsis, R.drawable.lu_sun_dim, R.drawable.lu_bell_off, R.drawable.lu_cast, R.drawable.lu_contrast, R.drawable.lu_bell, R.drawable.lu_check,
+        R.drawable.lu_sun, R.drawable.lu_cloud, R.drawable.lu_cloud_sun, R.drawable.lu_cloud_moon, R.drawable.lu_cloud_fog,
+        R.drawable.lu_cloud_rain, R.drawable.lu_cloud_lightning, R.drawable.lu_snowflake};
     int type = -1, color = 0xE6FFFFFF;
 
     Icon(Context c, int type) {
