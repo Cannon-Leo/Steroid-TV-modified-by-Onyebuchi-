@@ -92,9 +92,13 @@ def show_code(name, code):
                               f'display dialog "Type this code on {name} to let it approve Claude Code requests:\\n\\n'
                               f'{code[:4]} {code[4:]}" with title "Little Office" buttons {{"OK"}} giving up after {PAIR_TTL}'])
         elif platform.system() == "Windows":
-            subprocess.Popen(["powershell", "-NoProfile", "-Command",
-                              "Add-Type -AssemblyName PresentationFramework;"
-                              f"[System.Windows.MessageBox]::Show('Type this code on {name}: {code[:4]} {code[4:]}','Little Office')"])
+            # Native message box: no shell quoting (names like "Onyebuchi's TV" work), on top of every
+            # window, and it stays until OK. Its own thread, so the server keeps answering the TV.
+            import ctypes, threading
+            msg = f"Type this code on {name} to let it approve Claude Code requests:\n\n{code[:4]} {code[4:]}"
+            flags = 0x40 | 0x1000 | 0x10000 | 0x40000   # info icon, system modal, foreground, topmost
+            threading.Thread(target=lambda: ctypes.windll.user32.MessageBoxW(None, msg, "Little Office", flags),
+                             daemon=True).start()
     except Exception:
         pass
 

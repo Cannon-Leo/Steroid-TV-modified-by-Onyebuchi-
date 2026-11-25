@@ -199,8 +199,9 @@ On the TV, choose **Allow** if it asks about TV listings. Run the same command a
 - **Little Office** (agent status, notices and approvals from this PC): install
   [Python](https://www.python.org/downloads/) and tick **"Add python.exe to PATH"**. Copy the `little-office`
   folder to the PC, right click **PowerShell → Run as administrator**, go to that folder and run
-  `Set-ExecutionPolicy -Scope Process Bypass; .\install-windows.ps1`. Set your Wi‑Fi to **Private**
-  (Settings → Network → your Wi‑Fi) so the TV can reach the PC.
+  `Set-ExecutionPolicy -Scope Process Bypass; .\install-windows.ps1 -TV <your TV's address>` (Settings →
+  Network on the TV shows it). Only your TV can reach the PC, and the Wi‑Fi can stay **Public**. Without `-TV`,
+  set your Wi‑Fi to **Private** instead.
 - **Building the launcher on Windows**: run `wsl --install` in an administrator PowerShell, open Ubuntu,
   run `sudo apt install openjdk-17-jdk unzip zip curl python3`, download the **Linux** command line tools,
   and use step 1's last line with `$HOME/Android/Sdk` instead of `~/Library/Android/sdk`. Then steps 3 and 4.
@@ -235,10 +236,12 @@ your home network.
 - **Windows:** copy the `little-office` folder to the PC, open **PowerShell as administrator** in it, and run:
 
   ```powershell
-  Set-ExecutionPolicy -Scope Process Bypass; .\install-windows.ps1
+  Set-ExecutionPolicy -Scope Process Bypass; .\install-windows.ps1 -TV 192.168.1.51
   ```
-  It installs `zeroconf`, opens port 8765 for **private networks only**, and starts at every sign in
-  (Task Scheduler, task "Little Office").
+  Use your TV's address. It adds pip if Python came without it, installs `zeroconf`, lets **only the TV**
+  reach port 8765 on any network, and starts at every sign in (Task Scheduler, task "Little Office").
+  Leave out `-TV` to allow any device on **private** networks instead. Fix the TV's address in your router
+  (DHCP reservation) so it never changes. The pairing code pops up on top of every window.
 
 Each computer announces itself under its own name, so the TV sees all of them at once.
 
@@ -374,7 +377,7 @@ Every issue below actually happened while building this, and each has its fix.
 | **Recently played rows are empty** | They fill as you play things. Android does not share any app's own Continue Watching with launchers that are not part of the system (it returns 0 items), so Steroid keeps its own history. Check the listener permission: `adb shell cmd notification allow_listener tv.steroid.home/tv.steroid.home.NotifListener`. |
 | **Music widget empty or controls do nothing** | Same listener permission as above, then press Home once. |
 | **Recent apps screen is empty** | `adb shell appops set tv.steroid.home GET_USAGE_STATS allow` |
-| **Little Office: "Looking for the computer..."** | Mac: run `little-office/install.sh` again and allow incoming connections for Python. Windows: the network must be **Private**; rerun `install-windows.ps1` as administrator. Check `curl http://127.0.0.1:8765/status` on the computer. |
+| **Little Office: "Looking for the computer..."** | Mac: run `little-office/install.sh` again and allow incoming connections for Python. Windows: rerun `install-windows.ps1 -TV <your TV's address>` as administrator (or set the network to **Private**); if the TV's address changed, run it with the new one. Check `curl http://127.0.0.1:8765/status` on the computer. |
 | **Little Office says "All quiet" while Claude is working** | Claude app sessions run in the cloud, so there is nothing local to read. Use Claude Code in a terminal for live status. |
 | **YouTube stops when I leave it** | The YouTube TV app pauses itself when hidden; launchers cannot override that. The widget's play button reopens YouTube at the same video. Spotify and YouTube Music keep playing in the background. |
 | **"Up next: permission refused" during `install`** | Harmless if you already allowed it on the TV. |
