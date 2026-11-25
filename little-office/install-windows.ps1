@@ -13,7 +13,7 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 Get-ChildItem $here | Unblock-File -ErrorAction SilentlyContinue   # files downloaded from GitHub are blocked
 $dir = Join-Path $env:USERPROFILE ".little-office"
 New-Item -ItemType Directory -Force -Path $dir | Out-Null
-foreach ($f in "office.py", "approvals.py", "schema.py", "approve_hook.py", "notify_hook.py", "hooks.py") {
+foreach ($f in "office.py", "approvals.py", "schema.py", "approve_hook.py", "notify_hook.py", "hooks.py", "lo.ps1") {
   Copy-Item (Join-Path $here $f) (Join-Path $dir $f) -Force
 }
 
@@ -68,6 +68,7 @@ $ErrorActionPreference = "Continue"
 try {
   Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 http://127.0.0.1:8765/status | Out-Null
   Write-Host "LITTLE OFFICE RUNNING on this PC. Open Little Office on the TV; it finds this PC within a minute."
+  Write-Host "Everyday commands (any PowerShell window): & `"$dir\lo.ps1`" status | start | restart | test | tv <address> | connect"
 } catch {
   if ($TV) { Write-Host "It did not answer yet. Wait a few seconds and run this again." }
   else { Write-Host "It did not answer yet. Set your Wi-Fi to Private, or run again with -TV <your TV's address>." }

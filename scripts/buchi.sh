@@ -10,7 +10,9 @@
 #   myphotos          the same, from the private folder named in personal/photos-folder
 #   screensaver       use the Steroid photos screensaver (your photos, full colour, clock)
 #   office [approve]  check Little Office end to end and send a test notice (and approval) to the TV
-#   update   build + install + Little Office + diagnostics, in one go
+#   connect [ip]      find and connect to the TV (no address needed; retries, restarts adb)
+#   adb <args>        run adb against the TV without installing anything, e.g. buchi.sh adb devices
+#   update   connect + build + install + Little Office + diagnostics, in one go
 #   pip [full|close]   mini player stuck on screen? bring it back to full screen or close it
 #   undo     put everything back
 . "$(dirname "$0")/env.sh"
@@ -124,11 +126,11 @@ P
       "$0" photos "$L" || echo "Copying over adb stopped; the TV still gets the photos from Little Office."
     else
       echo "The TV isn't reachable over adb right now: it gets the photos from Little Office instead (press Home on the TV)."
-      echo "To reconnect adb: scripts/connect.sh <TV address>"
+      echo "To reconnect adb: scripts/buchi.sh connect"
     fi ;;
   office) shift; scripts/office-check.sh "$@" ;;  # Little Office end to end: buchi.sh office [approve]
   screensaver)  # use the Steroid photos screensaver (your photos, full colour, small clock) instead of Backdrop
-    tv get-state >/dev/null 2>&1 || { echo "The TV isn't reachable over adb. Reconnect: scripts/connect.sh <TV address>"; echo "Or on the TV: Settings > Device Preferences > Screen saver > Steroid photos"; exit 1; }
+    tv get-state >/dev/null 2>&1 || { echo "The TV isn't reachable over adb. Reconnect: scripts/buchi.sh connect"; echo "Or on the TV: Settings > Device Preferences > Screen saver > Steroid photos"; exit 1; }
     tv shell settings put secure screensaver_components tv.steroid.home/.PhotoDream && echo "Screensaver: Steroid photos" ;;  # Little Office end to end: buchi.sh office [approve]
   all)  # everything in one go: depth tool, build and install, Little Office, your photos, screensaver
     echo "== 1/5  Cut out tool for the depth effect"
@@ -145,7 +147,9 @@ P
     scripts/privacy-guard.sh
     echo "All done. Press Home on the TV; your photos arrive within a minute." ;;
   update)  # the whole fix in one go: build, install on the TV, refresh Little Office, then check the TV
-    scripts/build.sh && "$0" install && little-office/install.sh && scripts/diag.sh ;;
+    scripts/connect.sh && scripts/build.sh && "$0" install && little-office/install.sh && scripts/diag.sh ;;
+  connect) shift; scripts/connect.sh "$@" ;;
+  adb) shift; tv "$@" ;;
   pip) shift; scripts/pip.sh "$@" ;;   # mini player stuck? buchi.sh pip full / pip close
   undo) backup/restore.sh ;;
   *) sed -n 2,10p "$0" ;;

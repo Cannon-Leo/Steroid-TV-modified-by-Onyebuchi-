@@ -1,7 +1,10 @@
 #!/bin/bash
 # Shared paths for every script. Source it: . "$(dirname "$0")/env.sh"
-set -e
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Stop on errors inside scripts, but never in your own Terminal window if you load this by hand
+# (there, set -e would close the window at the first failed command).
+case $- in *i*) ;; *) set -e ;; esac
+_here="${BASH_SOURCE[0]:-$0}"
+ROOT="$(cd "$(dirname "$_here")/.." && pwd)"
 SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}}"
 [ -d "$SDK" ] || SDK="$HOME/Android/Sdk"
 ADB="$SDK/platform-tools/adb"
@@ -13,3 +16,4 @@ PY="$(command -v python3)"
 # The TV to talk to (set by connect.sh); every adb call goes through tv().
 TV_SERIAL="$(cat "$ROOT/.tv-serial" 2>/dev/null || true)"
 tv() { if [ -n "$TV_SERIAL" ]; then "$ADB" -s "$TV_SERIAL" "$@"; else "$ADB" "$@"; fi; }
+adb() { "$ADB" "$@"; }   # so `adb` works in a Terminal that loaded this file

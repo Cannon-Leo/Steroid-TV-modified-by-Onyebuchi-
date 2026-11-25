@@ -4,6 +4,7 @@ launcher/assets/config/
 launcher/assets/windows/
 backup/
 .tv-serial
+.tv-name
 .DS_Store
 *.apk
 *.idsig

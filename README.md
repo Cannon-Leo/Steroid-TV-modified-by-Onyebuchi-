@@ -243,6 +243,10 @@ your home network.
   Leave out `-TV` to allow any device on **private** networks instead. Fix the TV's address in your router
   (DHCP reservation) so it never changes. The pairing code pops up on top of every window.
 
+  Everyday commands afterwards, in any PowerShell window: `& "$HOME\.little-office\lo.ps1" status`
+  (also `start`, `restart`, `test` for a mock approval on the TV, `tv <address>` after the TV gets a new
+  address, and `connect` to reach the TV with adb from the PC).
+
 Each computer announces itself under its own name, so the TV sees all of them at once.
 
 **What it reads:** Claude Code logs in `~/.claude/projects`, Codex in `~/.codex`, and Antigravity's task
@@ -373,7 +377,7 @@ Every issue below actually happened while building this, and each has its fix.
 | **The SDK command "does not work" with the downloaded zip** | The zip is named `commandlinetools-mac_x86_64-...`; use the pattern `commandlinetools-mac*.zip` as above. |
 | **Build fails: `NullPointerException: Cannot invoke "String.length()"` in `d8`** | build-tools 34 cannot read classes compiled by Java 25. Install build-tools 36: `sdkmanager --sdk_root=$HOME/Library/Android/sdk "build-tools;36.0.0"`. The scripts pick the newest automatically. |
 | **`WARNING: A restricted method in java.lang.System has been called`** | Harmless Java 25 notice. Ignore it. |
-| **`adb: device '192.168.x.x:5555' not found`** (after a power cut) | The stick may have a new IP. Wake the TV and reconnect by its network name: `IP=$(ping -c1 <stick-id>.local \| sed -n 's/.*(\([0-9.]*\)).*/\1/p'); scripts/connect.sh $IP`. Find the name with `dns-sd -Z _googlecast._tcp local` (look for the `SRV` line). Reserve the IP in your router to avoid this. |
+| **`adb: device '192.168.x.x:5555' not found`**, **No route to host** or **Connection refused** | Run `scripts/buchi.sh connect` (no address needed). It retries, restarts adb, tries the TV's network name, then looks for it on your Wi‑Fi, and says exactly what to do: wake the TV, accept "Allow debugging?", or turn **Network debugging** back on. `scripts/buchi.sh update` does this first by itself. Reserve the TV's address in your router to avoid new addresses. Don't type `adb` yourself: use `scripts/buchi.sh adb <args>`. |
 | **`failed to connect ...: No route to host`** | TV asleep, a different Wi‑Fi network, or router client isolation on. Wake the TV and check `ping <TV-IP>`. |
 | **`zsh: event not found`** | A `!` in a pasted command. Use a version without `$!`. |
 | **`Home app not switched (got com.google.android.tvlauncher/...)`** | Android TV keeps its own launcher first. The current `install` handles it: it checks Steroid opens, then switches the stock launchers off. If Steroid ever breaks: `adb shell pm enable com.google.android.tvlauncher`. |
