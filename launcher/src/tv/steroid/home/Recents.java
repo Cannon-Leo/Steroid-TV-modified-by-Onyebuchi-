@@ -91,7 +91,8 @@ public class Recents extends Activity {
     final Handler h = new Handler(Looper.getMainLooper());
     FrameLayout root, stack, closeAll;
     LinearLayout emptyBox, bottom;
-    TextView count, ramFree, ramOf, hint;
+    TextView count, ramFree, ramOf;
+    LinearLayout keys;
     View ramFill;
     GradientDrawable ramFillBg, closeBg;
     int cur;
@@ -132,7 +133,7 @@ public class Recents extends Activity {
         stack = new Stack(this);
         stack.setClipChildren(false);
         FrameLayout.LayoutParams sl = new FrameLayout.LayoutParams(-1, Ui.px(H + 60), Gravity.CENTER);
-        sl.topMargin = -Ui.px(30);   // clear of Close all and its hint below
+        sl.topMargin = -Ui.px(30);   // clear of Close all and the keys card below
         root.addView(stack, sl);
 
         emptyBox = new LinearLayout(this);
@@ -178,17 +179,42 @@ public class Recents extends Activity {
         bottom.addView(closeAll, new LinearLayout.LayoutParams(Ui.px(60), Ui.px(60)));
         TextView cl = Ui.text(this, Ui.sansMedium, 12, 0xCCFFFFFF);
         cl.setText("Close all");
+        cl.setGravity(Gravity.CENTER);
+        cl.setSingleLine(true);
         cl.setPadding(0, Ui.px(8), 0, 0);
-        bottom.addView(cl);
-        // the keys, centred under Close all (never over it)
-        hint = Ui.text(this, Ui.sans, 12, 0x99FFFFFF);
-        hint.setText("Left and right to browse  ·  Up to close an app  ·  OK to open  ·  hold OK for options");
-        hint.setGravity(Gravity.CENTER);
-        hint.setPadding(0, Ui.px(14), 0, 0);
-        bottom.addView(hint);
+        bottom.addView(cl, new LinearLayout.LayoutParams(Ui.px(96), -2));   // centred under the X
         FrameLayout.LayoutParams bl = new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
-        bl.bottomMargin = Ui.px(22);
+        bl.bottomMargin = Ui.px(30);
         root.addView(bottom, bl);
+
+        // how to use it: a small glass card bottom left, one key per line
+        keys = new LinearLayout(this);
+        keys.setOrientation(LinearLayout.VERTICAL);
+        keys.setPadding(Ui.px(16), Ui.px(12), Ui.px(18), Ui.px(12));
+        Glass.apply(keys, 16, 0x59101014);
+        String[][] k = {{"◀ ▶", "Browse"}, {"▲", "Close the app"}, {"OK", "Open"}, {"Hold OK", "Options"}};
+        for (int i = 0; i < k.length; i++) {
+            LinearLayout row = new LinearLayout(this);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            TextView key = Ui.text(this, Ui.sansMedium, 11, 0xE6FFFFFF);
+            key.setText(k[i][0]);
+            key.setGravity(Gravity.CENTER);
+            key.setSingleLine(true);
+            key.setPadding(Ui.px(7), Ui.px(2), Ui.px(7), Ui.px(2));
+            key.setBackground(Ui.round(0x26FFFFFF, 6));
+            row.addView(key, new LinearLayout.LayoutParams(Ui.px(62), -2));
+            TextView what = Ui.text(this, Ui.sans, 12, 0xB3FFFFFF);
+            what.setText(k[i][1]);
+            what.setSingleLine(true);
+            what.setPadding(Ui.px(10), 0, 0, 0);
+            row.addView(what);
+            LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-2, -2);
+            if (i > 0) rl.topMargin = Ui.px(6);
+            keys.addView(row, rl);
+        }
+        FrameLayout.LayoutParams kl = new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.START);
+        kl.setMargins(Ui.px(56), 0, 0, Ui.px(30));
+        root.addView(keys, kl);
 
         setContentView(root);
         root.setAlpha(0f);
@@ -307,6 +333,7 @@ public class Recents extends Activity {
         if (items.isEmpty()) { showEmpty(null, null); return; }
         emptyBox.setVisibility(View.GONE);
         bottom.setVisibility(View.VISIBLE);
+        keys.setVisibility(View.VISIBLE);
         layoutStack(false);
         stack.requestFocus();
         counts();
@@ -320,6 +347,7 @@ public class Recents extends Activity {
         emptyBox.setAlpha(0f);
         emptyBox.animate().alpha(1f).setDuration(220).start();
         bottom.setVisibility(View.INVISIBLE);
+        keys.setVisibility(View.INVISIBLE);
         count.setText("Nothing open");
     }
 
