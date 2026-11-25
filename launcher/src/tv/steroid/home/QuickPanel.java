@@ -370,13 +370,27 @@ final class QuickPanel extends FrameLayout {
         return f;
     }
 
-    /** Now playing card: title, then previous, play or pause, next. */
+    /** Now playing card: title, then previous, play or pause, next. While something plays, the album
+     *  art fills the card, softened and under a dark scrim, so the text and controls keep their contrast. */
     View media(Context c) {
+        FrameLayout card = new FrameLayout(c);
+        card.setBackground(Ui.round(OFF, 30));
+        card.setClipToOutline(true);   // the art follows the card's rounded corners
+        android.widget.ImageView cover = new android.widget.ImageView(c);
+        cover.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
+        cover.setAlpha(0f);
+        card.addView(cover, new FrameLayout.LayoutParams(-1, -1));
+        // scrim: at least 62% black everywhere (white text stays above 4.5:1 on any picture), darker at the controls
+        View scrim = new View(c);
+        scrim.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0x9E000000, 0xA6000000, 0xC2000000}));
+        scrim.setAlpha(0f);
+        card.addView(scrim, new FrameLayout.LayoutParams(-1, -1));
         LinearLayout m = new LinearLayout(c);
         m.setOrientation(LinearLayout.VERTICAL);
         m.setPadding(Ui.px(18), Ui.px(16), Ui.px(18), Ui.px(14));
-        m.setBackground(Ui.round(OFF, 30));
         m.setClipChildren(false);
+        card.addView(m, new FrameLayout.LayoutParams(-1, -1));
+        final android.graphics.Bitmap[] lastArt = {null};
         LinearLayout top = new LinearLayout(c);
         top.setGravity(Gravity.CENTER_VERTICAL);
         TextView app = Ui.text(c, Ui.sans, 13, 0x99FFFFFF);
@@ -416,6 +430,19 @@ final class QuickPanel extends FrameLayout {
             prev.setAlpha(on ? 1f : 0.35f);
             next.setAlpha(on ? 1f : 0.35f);
             pi.setImageResource(Icon.RES[on && n.shownPlaying ? Icon.PAUSE : Icon.PLAY]);
+            android.graphics.Bitmap a = on ? n.shownArt : null;
+            if (a != lastArt[0]) {
+                lastArt[0] = a;
+                if (a != null) cover.setImageBitmap(soft(a));
+                float to = a != null ? 1f : 0f;
+                cover.animate().alpha(to * 0.9f).setDuration(300).start();
+                scrim.animate().alpha(to).setDuration(300).start();
+                // small grey text brightens over a picture so it still reads at 4.5:1 or better
+                int second = a != null ? 0xD9FFFFFF : 0x99FFFFFF;
+                app.setTextColor(second);
+                sub.setTextColor(second);
+                cast.color(second);
+            }
             if (!on) { app.setText("Music"); title.setText("Nothing playing"); sub.setText("Play to choose an app"); return; }
             android.media.MediaMetadata md = n.ctl.getMetadata();
             String t = md == null ? null : md.getString(android.media.MediaMetadata.METADATA_KEY_TITLE);
@@ -430,7 +457,17 @@ final class QuickPanel extends FrameLayout {
         };
         paint.run();
         refreshers.add(paint);
-        return m;
+        return card;
+    }
+
+    /** The album art, softened: shrunk to a few pixels and scaled back up, a blur that costs nothing. */
+    static android.graphics.Bitmap soft(android.graphics.Bitmap b) {
+        try {
+            int w = Math.max(1, b.getWidth()), hgt = Math.max(1, b.getHeight());
+            float k = 20f / Math.max(w, hgt);
+            android.graphics.Bitmap tiny = android.graphics.Bitmap.createScaledBitmap(b, Math.max(1, Math.round(w * k)), Math.max(1, Math.round(hgt * k)), true);
+            return android.graphics.Bitmap.createScaledBitmap(tiny, tiny.getWidth() * 6, tiny.getHeight() * 6, true);
+        } catch (Throwable e) { return b; }
     }
 
     View small(Context c, Icon i, String name, Runnable run) {
