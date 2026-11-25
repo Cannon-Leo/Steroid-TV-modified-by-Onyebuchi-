@@ -49,21 +49,56 @@ public class HomeKeys extends AccessibilityService {
      * time it comes to the front and switches the service straight back on, keeping any other services.
      * Needs WRITE_SECURE_SETTINGS, which only adb can grant (scripts/buchi.sh install does it once).
      */
+    static long lastFix = -60000;
+
     static void ensure(android.content.Context c) {
         if (c.checkSelfPermission("android.permission.WRITE_SECURE_SETTINGS") != android.content.pm.PackageManager.PERMISSION_GRANTED) return;
         try {
-            android.content.ContentResolver r = c.getContentResolver();
-            String me = c.getPackageName() + "/" + HomeKeys.class.getName();
+            final android.content.ContentResolver r = c.getContentResolver();
+            final String me = c.getPackageName() + "/" + HomeKeys.class.getName();
             String have = android.provider.Settings.Secure.getString(r, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
-            if (have != null && (":" + have + ":").contains(":" + me + ":")
-                && android.provider.Settings.Secure.getInt(r, android.provider.Settings.Secure.ACCESSIBILITY_ENABLED, 0) == 1) return;
-            String now = have == null || have.isEmpty() || have.equals("null") ? me
-                : (":" + have + ":").contains(":" + me + ":") ? have : have + ":" + me;
-            android.provider.Settings.Secure.putString(r, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, now);
-            android.provider.Settings.Secure.putInt(r, android.provider.Settings.Secure.ACCESSIBILITY_ENABLED, 1);
-            android.util.Log.i("SteroidHome", "hold Home switched back on");
+            boolean listed = have != null && (":" + have + ":").contains(":" + me + ":");
+            boolean on = android.provider.Settings.Secure.getInt(r, android.provider.Settings.Secure.ACCESSIBILITY_ENABLED, 0) == 1;
+            if (listed && on && running(c)) return;   // switched on and actually running: nothing to do
+            long now = android.os.SystemClock.elapsedRealtime();
+            if (now - lastFix < 15000) return;          // just restarted it: give Android time to start it
+            lastFix = now;
+            // Not running: never switched on, switched off, or marked "crashed" (Android then never starts
+            // it again by itself). Taking it off the list and putting it back makes Android start it fresh.
+            final String others = without(have, me);
+            android.provider.Settings.Secure.putString(r, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, others);
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                try {
+                    android.provider.Settings.Secure.putString(r, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+                        others.isEmpty() ? me : others + ":" + me);
+                    android.provider.Settings.Secure.putInt(r, android.provider.Settings.Secure.ACCESSIBILITY_ENABLED, 1);
+                    android.util.Log.i("SteroidHome", "hold Home (re)started");
+                } catch (Exception e) { android.util.Log.w("SteroidHome", "couldn't start hold Home: " + e); }
+            }, 600);
         } catch (Exception e) { android.util.Log.w("SteroidHome", "couldn't switch hold Home on: " + e); }
     }
+
+    /** Is the service really running (bound), not just listed? Crashed services are listed but not running. */
+    static boolean running(android.content.Context c) {
+        try {
+            android.view.accessibility.AccessibilityManager am =
+                (android.view.accessibility.AccessibilityManager) c.getSystemService(android.content.Context.ACCESSIBILITY_SERVICE);
+            for (android.accessibilityservice.AccessibilityServiceInfo i :
+                    am.getEnabledAccessibilityServiceList(android.accessibilityservice.AccessibilityServiceInfo.FEEDBACK_ALL_MASK))
+                if (i.getResolveInfo() != null && i.getResolveInfo().serviceInfo != null
+                    && HomeKeys.class.getName().equals(i.getResolveInfo().serviceInfo.name)) return true;
+        } catch (Exception ignored) {}
+        return false;
+    }
+
+    static String without(String list, String me) {
+        if (list == null || list.equals("null")) return "";
+        StringBuilder b = new StringBuilder();
+        for (String p : list.split(":")) if (!p.isEmpty() && !p.equals(me)) b.append(b.length() == 0 ? "" : ":").append(p);
+        return b.toString();
+    }
+
+    @Override protected void onServiceConnected() { android.util.Log.i("SteroidHome", "hold Home service running"); }
 
     @Override public void onAccessibilityEvent(AccessibilityEvent event) {}
     @Override public void onInterrupt() { h.removeCallbacks(hold); }

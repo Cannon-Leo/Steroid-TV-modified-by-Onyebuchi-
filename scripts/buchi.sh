@@ -35,15 +35,19 @@ homekeys() {
   # once: lets the launcher switch it back on by itself whenever Android turns it off (permanent fix)
   tv shell pm grant tv.steroid.home android.permission.WRITE_SECURE_SETTINGS 2>/dev/null || true
   have=$(tv shell settings get secure enabled_accessibility_services | tr -d '\r')
-  case "$have" in *"$S"*) ;; null|"") tv shell settings put secure enabled_accessibility_services "$S" ;;
-    *) tv shell settings put secure enabled_accessibility_services "$have:$S" ;; esac
+  # off the list, then back on: Android starts it fresh even if it had marked it "crashed"
+  local rest; rest=$(echo "$have" | tr ':' '\n' | grep -v -x -e "$S" -e null -e '' | paste -sd: - || true)
+  if [ -n "$rest" ]; then tv shell settings put secure enabled_accessibility_services "$rest"; else tv shell settings delete secure enabled_accessibility_services >/dev/null; fi
+  sleep 1
+  tv shell settings put secure enabled_accessibility_services "${rest:+$rest:}$S"
   tv shell settings put secure accessibility_enabled 1
   mkdir -p backup
   grep -q "enabled_accessibility_services" backup/restore.sh 2>/dev/null || \
     echo "tv shell settings put secure enabled_accessibility_services '${have/null/}'" >> backup/restore.sh
-  sleep 1
-  tv shell settings get secure enabled_accessibility_services | tr -d '\r' | grep -q HomeKeys \
-    && echo "Hold Home for Recent apps: on" || echo "Hold Home for Recent apps: Android refused it. Switch on 'Steroid Home button' in Settings > Device Preferences > Accessibility"
+  sleep 3
+  if tv shell dumpsys accessibility | tr -d '\r' | grep -i "Bound services" | grep -q -E "HomeKeys|Steroid Home button"; then echo "Hold Home for Recent apps: on (running)"
+  elif tv shell settings get secure enabled_accessibility_services | tr -d '\r' | grep -q HomeKeys; then echo "Hold Home for Recent apps: switched on, starting (the launcher restarts it if needed)"
+  else echo "Hold Home for Recent apps: Android refused it. Switch on 'Steroid Home button' in Settings > Device Preferences > Accessibility"; fi
 }
 
 case "$1" in

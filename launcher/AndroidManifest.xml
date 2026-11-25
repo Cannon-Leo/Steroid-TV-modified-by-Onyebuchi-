@@ -58,7 +58,9 @@
             android:taskAffinity="tv.steroid.home.recents" android:launchMode="singleTask"
             android:excludeFromRecents="true" android:noHistory="true" />
         <!-- Hold Home for Recent apps: sees key presses only, acts on Home only -->
+        <!-- its own process: a crash anywhere in the launcher can't take the Home button down with it -->
         <service android:name=".HomeKeys" android:exported="true" android:label="Steroid Home button"
+            android:process=":keys"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
             <meta-data android:name="android.accessibilityservice" android:resource="@xml/home_keys" />
