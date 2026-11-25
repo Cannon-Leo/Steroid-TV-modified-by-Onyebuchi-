@@ -149,7 +149,7 @@ final class QuickPanel extends FrameLayout {
         // Bluetooth stays on (the remote uses it): OK opens the Bluetooth panel with every device
         wide(r1, G, Icon.BLUETOOTH, Icon.BT_OFF, "Bluetooth",
             QuickPanel::btOn, () -> !btOn() ? "Off" : btConnected() == 0 ? "On" : "On · " + btConnected() + " connected",
-            this::openBluetooth, this::openBluetooth);
+            this::openBluetooth, () -> { close(); BluetoothPanel.openAccessories(home); });  // hold: Remotes & Accessories
 
         // 2. now playing | volume | background
         LinearLayout r2 = row(G);

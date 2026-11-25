@@ -99,21 +99,26 @@ public class Windows extends Activity {
         for (int i = 0; i < Places.MOODS.length; i++) filterRow.addView(filterChip(i));
         col.addView(filterRow);
 
-        // full width with its own side padding. Overflow hidden: scrolled cards stop at the grid's top edge
-        // and never spill over "Where shall we look" and the filter tabs. Cards here don't zoom, so
-        // nothing needs to draw outside the grid.
+        // full width with its own side padding. Overflow hidden: the grid sits in a clipping frame, so
+        // scrolled cards slide UNDER the title and filter tabs instead of over them. (A view is only
+        // clipped to its bounds by its parent, so the frame does the clipping, not the scroll view.)
+        // Cards here don't zoom, so nothing needs to draw outside it.
         ScrollView scroll = new Rails.Page(this, Ui.px(48));
-        scroll.setClipToPadding(false);
+        scroll.setClipToPadding(true);
         scroll.setClipChildren(true);
         scroll.setPadding(Ui.px(52), Ui.px(14), Ui.px(52), Ui.px(40));
         grid = new GridLayout(this);
         grid.setColumnCount(4);
         grid.setClipChildren(false);
         scroll.addView(grid);
+        FrameLayout clip = new FrameLayout(this);
+        clip.setClipChildren(true);
+        clip.setClipToPadding(true);
+        clip.addView(scroll, new FrameLayout.LayoutParams(-1, -1));
         LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(-1, 0, 1f);
         slp.leftMargin = -Ui.px(52);
         slp.rightMargin = -Ui.px(52);
-        col.addView(scroll, slp);
+        col.addView(clip, slp);
         browser.addView(col, new FrameLayout.LayoutParams(-1, -1));
         root.addView(browser);
     }

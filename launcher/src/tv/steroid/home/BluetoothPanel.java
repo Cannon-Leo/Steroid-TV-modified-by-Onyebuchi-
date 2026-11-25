@@ -97,7 +97,7 @@ final class BluetoothPanel extends FrameLayout {
         acts.addView(set, sl);
         list.addView(acts);
         pair.setOnClickListener(v -> launch("Pairing", pairIntents()));
-        set.setOnClickListener(v -> launch("Bluetooth settings", settingsIntents()));
+        set.setOnClickListener(v -> { close(); openAccessories(home); });
         first = pair;
 
         devices = new LinearLayout(hm);
@@ -121,6 +121,41 @@ final class BluetoothPanel extends FrameLayout {
             new Intent("android.settings.BLUETOOTH_PAIRING_SETTINGS"),
             new Intent(Settings.ACTION_BLUETOOTH_SETTINGS),
         };
+    }
+
+    /** The TV's settings apps, where Remotes & Accessories lives (stock, Google's Bluetooth services, Xiaomi). */
+    static final String[] SETTINGS_PKGS = {TVS, "com.google.android.tv.btservices", "com.xiaomi.mitv.settings",
+        "com.mitv.settings", "com.xiaomi.tv.settings"};
+    static final java.util.regex.Pattern ACCESSORIES = java.util.regex.Pattern.compile(
+        "(?i).*(accessor(y|ies)(settings)?activity|connecteddevices\\w*activity|remotes?andaccessor\\w*|bluetoothsettings\\w*activity)$");
+    static final java.util.regex.Pattern NOT_LIST = java.util.regex.Pattern.compile(
+        "(?i).*(add|pair|picker|permission|action|request|dialog|bluetoothaccessoryactivity).*");
+
+    /** Remotes & Accessories itself: the system's Bluetooth settings screen if this TV has one, else the
+     *  accessories page found in the settings apps, else Settings (Remotes & Accessories is on its first page). */
+    static void openAccessories(Context c) {
+        android.content.pm.PackageManager pm = c.getPackageManager();
+        List<Intent> chain = new ArrayList<>();
+        Intent sys = new Intent(Settings.ACTION_BLUETOOTH_SETTINGS);
+        if (sys.resolveActivity(pm) != null) chain.add(sys);
+        for (String pkg : SETTINGS_PKGS) {
+            try {
+                android.content.pm.PackageInfo pi = pm.getPackageInfo(pkg, android.content.pm.PackageManager.GET_ACTIVITIES);
+                if (pi.activities == null) continue;
+                for (android.content.pm.ActivityInfo a : pi.activities) {
+                    if (!a.exported || !ACCESSORIES.matcher(a.name).matches() || NOT_LIST.matcher(a.name).matches()) continue;
+                    android.util.Log.i("SteroidBT", "accessories page: " + a.name);
+                    chain.add(new Intent().setComponent(new ComponentName(pkg, a.name)));
+                }
+            } catch (Exception ignored) {}
+        }
+        chain.add(new Intent("com.android.tv.settings.ACCESSORIES"));
+        chain.add(new Intent(Settings.ACTION_SETTINGS));
+        for (Intent i : chain) {
+            try { c.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return; }
+            catch (Exception ignored) {}
+        }
+        Toast.makeText(c, "Remotes & Accessories isn't available on this TV", Toast.LENGTH_SHORT).show();
     }
 
     static Intent[] settingsIntents() {

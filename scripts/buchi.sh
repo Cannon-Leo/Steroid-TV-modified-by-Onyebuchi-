@@ -151,7 +151,7 @@ P
     scripts/connect.sh && scripts/build.sh && "$0" install && little-office/install.sh && scripts/diag.sh ;;
   connect) shift; scripts/connect.sh "$@" ;;
   adb) shift; tv "$@" ;;
-  demo) scripts/demo-video.sh ;;
+  demo) shift; scripts/demo-video.sh "$@" ;;
   pip) shift; scripts/pip.sh "$@" ;;   # mini player stuck? buchi.sh pip full / pip close
   undo) backup/restore.sh ;;
   *) sed -n 2,10p "$0" ;;
