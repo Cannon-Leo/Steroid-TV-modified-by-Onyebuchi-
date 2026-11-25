@@ -574,6 +574,7 @@ public class Home extends Activity {
         boolean refocus = focused == null || isIn(focused, watchRow) || isIn(focused, mineRow) || isIn(focused, allBox);
         installed = Apps.all(this);
         firstApp = null;
+        cardOf.clear();
         List<String> watch = watchList();
 
         // Watch: streaming apps, then a + card to add more
@@ -585,8 +586,9 @@ public class Home extends Activity {
                 final int at = i;
                 View c = Apps.card(this, a, () -> focusTitle(a.label),
                     v -> { Apps.menu(this, a, new String[]{"Move left", "Move right", "Remove from Watch"},
-                        new Runnable[]{() -> move("watch", at, -1), () -> move("watch", at, 1), () -> remove("watch", a.pkg)},
+                        new Runnable[]{() -> startMove("watch", a.pkg, -1), () -> startMove("watch", a.pkg, 1), () -> remove("watch", a.pkg)},
                         this::rebuildApps); return true; });
+                cardOf.put("watch:" + a.pkg, c);
                 add(watchRow, c, 168 * watchScale, 94 * watchScale);
                 if (firstApp == null) firstApp = c;
             }
@@ -596,7 +598,8 @@ public class Home extends Activity {
         }
 
         // Video rows: one per Watch app that publishes continue watching / recommendations
-        if (shelvesBox != null) {
+        // (left alone while a card is being moved; they follow the new order when it's dropped)
+        if (shelvesBox != null && movingPkg == null) {
             List<String> have = new ArrayList<>();
             for (Shelf sh : shelves) have.add(sh.pkg);
             List<String> want = new ArrayList<>();
@@ -620,11 +623,12 @@ public class Home extends Activity {
             for (int i = 0; i < mine.size(); i++) {
                 Apps.App a = Apps.find(installed, mine.get(i));
                 if (a == null) continue;
-                final int at = i;
-                add(mineRow, Apps.card(this, a, () -> ambient.tint(0xFF8FB8D8),
+                View mc = Apps.card(this, a, () -> ambient.tint(0xFF8FB8D8),
                     v -> { Apps.menu(this, a, new String[]{"Move left", "Move right", "Remove from My apps"},
-                        new Runnable[]{() -> move("mine", at, -1), () -> move("mine", at, 1), () -> remove("mine", a.pkg)},
-                        this::rebuildApps); return true; }), 150 * mineScale, 84 * mineScale);
+                        new Runnable[]{() -> startMove("mine", a.pkg, -1), () -> startMove("mine", a.pkg, 1), () -> remove("mine", a.pkg)},
+                        this::rebuildApps); return true; });
+                cardOf.put("mine:" + a.pkg, mc);
+                add(mineRow, mc, 150 * mineScale, 84 * mineScale);
             }
             add(mineRow, plusCard("mine"), 84 * mineScale, 84 * mineScale);
         }
@@ -675,6 +679,125 @@ public class Home extends Activity {
         String t = l.get(i); l.set(i, l.get(j)); l.set(j, t);
         Prefs.list(this, key, l);
         rebuildApps();
+    }
+
+    // ---------- Move mode: pick a card up, move it anywhere, drop it ----------
+    // Like the stock launcher: "Move left" or "Move right" lifts the card (bigger, raised) and takes
+    // the first step. While it's lifted, left and right keep moving it along its row, up and down take
+    // it to the other row (Watch and My apps), OK drops it there, Back puts everything back.
+    String movingKey, movingPkg;
+    List<String> moveWatch0, moveMine0;
+    TextView moveHint;
+    final java.util.Map<String, View> cardOf = new java.util.HashMap<>();
+
+    void startMove(String key, String pkg, int first) {
+        movingKey = key;
+        movingPkg = pkg;
+        moveWatch0 = new ArrayList<>(watchList());
+        moveMine0 = new ArrayList<>(Prefs.listOrEmpty(this, "mine"));
+        showMoveHint();
+        h.postDelayed(() -> { if (movingPkg == null) return; if (first != 0) stepMove(first, 0); else liftMoving(); }, 60);
+    }
+
+    /** Keys while a card is lifted; true when the key was used. */
+    boolean moveKey(android.view.KeyEvent e) {
+        if (movingPkg == null) return false;
+        int k = e.getKeyCode();
+        boolean down = e.getAction() == android.view.KeyEvent.ACTION_DOWN;
+        switch (k) {
+            case android.view.KeyEvent.KEYCODE_DPAD_LEFT: if (down) stepMove(-1, 0); return true;
+            case android.view.KeyEvent.KEYCODE_DPAD_RIGHT: if (down) stepMove(1, 0); return true;
+            case android.view.KeyEvent.KEYCODE_DPAD_UP: if (down && e.getRepeatCount() == 0) stepMove(0, -1); return true;
+            case android.view.KeyEvent.KEYCODE_DPAD_DOWN: if (down && e.getRepeatCount() == 0) stepMove(0, 1); return true;
+            case android.view.KeyEvent.KEYCODE_DPAD_CENTER: case android.view.KeyEvent.KEYCODE_ENTER:
+                if (!down) dropMove(false); return true;
+            case android.view.KeyEvent.KEYCODE_BACK: case android.view.KeyEvent.KEYCODE_ESCAPE:
+                if (!down) dropMove(true); return true;
+        }
+        return false;
+    }
+
+    void stepMove(int dx, int dy) {
+        List<String> w = watchList(), m = Prefs.listOrEmpty(this, "mine");
+        List<String> cur = movingKey.equals("watch") ? w : m;
+        int i = cur.indexOf(movingPkg);
+        if (i < 0) { dropMove(true); return; }
+        if (dx != 0) {
+            int j = i + dx;
+            if (j < 0 || j >= cur.size()) { nudge(dx, 0); return; }   // at the end of the row
+            cur.remove(i);
+            cur.add(j, movingPkg);
+        } else {
+            String to = movingKey.equals("watch") ? "mine" : "watch";
+            View from = movingKey.equals("watch") ? watchRow : mineRow, dest = to.equals("watch") ? watchRow : mineRow;
+            if (from == null || dest == null) { nudge(0, dy); return; }
+            int[] a = new int[2], b = new int[2];
+            from.getLocationOnScreen(a);
+            dest.getLocationOnScreen(b);
+            if (dy < 0 ? b[1] >= a[1] : b[1] <= a[1]) { nudge(0, dy); return; }   // no row that way
+            List<String> other = to.equals("watch") ? w : m;
+            cur.remove(i);
+            other.remove(movingPkg);
+            other.add(Math.min(i, other.size()), movingPkg);
+            movingKey = to;
+        }
+        Prefs.list(this, "watch", w);
+        Prefs.list(this, "mine", m);
+        rebuildApps();
+        liftMoving();
+    }
+
+    void liftMoving() {
+        View c = cardOf.get(movingKey + ":" + movingPkg);
+        if (c == null) return;
+        c.requestFocus();
+        c.post(() -> {
+            if (movingPkg == null) return;
+            c.animate().cancel();
+            c.animate().scaleX(1.16f).scaleY(1.16f).translationY(-Ui.px(10)).alpha(0.96f).setDuration(140).start();
+            c.setTranslationZ(Ui.px(24));
+        });
+    }
+
+    void nudge(int dx, int dy) {
+        View c = cardOf.get(movingKey + ":" + movingPkg);
+        if (c == null) return;
+        float y = -Ui.px(10);
+        c.animate().translationX(dx * Ui.px(10)).translationY(y + dy * Ui.px(8)).setDuration(80)
+            .withEndAction(() -> c.animate().translationX(0).translationY(y).setDuration(120).start()).start();
+    }
+
+    /** OK drops the card where it is; Back (cancel) puts both rows back as they were. */
+    void dropMove(boolean cancel) {
+        if (movingPkg == null) return;
+        String key = movingKey, pkg = movingPkg;
+        if (cancel) {
+            Prefs.list(this, "watch", moveWatch0);
+            Prefs.list(this, "mine", moveMine0);
+            key = moveWatch0.contains(pkg) && !"mine".equals(key) ? "watch" : moveMine0.contains(pkg) ? "mine" : "watch";
+        }
+        movingPkg = null;
+        movingKey = null;
+        if (moveHint != null) { View t = moveHint; moveHint = null; t.animate().alpha(0f).setDuration(150).withEndAction(() -> rootView.removeView(t)).start(); }
+        rebuildApps();   // shelves follow the new Watch order now
+        View c = cardOf.get(key + ":" + pkg);
+        if (c != null) c.requestFocus();
+    }
+
+    void showMoveHint() {
+        if (rootView == null) return;
+        if (moveHint != null) rootView.removeView(moveHint);
+        Apps.App a = Apps.find(installed, movingPkg);
+        TextView t = Ui.text(this, Ui.sansMedium, 13, 0xFFFFFFFF);
+        t.setText("Moving " + (a == null ? "app" : a.label) + "    ◀ ▶ move    ▲ ▼ other row    OK drop    Back cancel");
+        t.setPadding(Ui.px(18), Ui.px(10), Ui.px(18), Ui.px(10));
+        Glass.apply(t, 20, 0x8C101014);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        lp.topMargin = Ui.px(18);
+        rootView.addView(t, lp);
+        t.setAlpha(0f);
+        t.animate().alpha(1f).setDuration(160).start();
+        moveHint = t;
     }
 
     void remove(String key, String pkg) {
@@ -1391,6 +1514,7 @@ public class Home extends Activity {
 
     @Override protected void onPause() {
         h.removeCallbacks(pipPoll);
+        if (movingPkg != null) dropMove(false);
         super.onPause();
         resumed = false;
         if (live == this) live = null;
@@ -1441,6 +1565,7 @@ public class Home extends Activity {
 
     @Override public boolean dispatchKeyEvent(android.view.KeyEvent e) {
         if (e.getAction() == android.view.KeyEvent.ACTION_DOWN) keyAt = android.os.SystemClock.uptimeMillis();
+        if (moveKey(e)) return true;   // a lifted card takes the arrows, OK and Back
         return super.dispatchKeyEvent(e);
     }
 
@@ -1449,6 +1574,7 @@ public class Home extends Activity {
      *  rows rebuilt as home came back, focus taken by something else), unless you've pressed a key since. */
     void goHome(boolean smooth) {
         if (tour != null) return;   // the tour keeps its place
+        if (movingPkg != null) dropMove(false);   // Home while moving a card: it stays where it is
         if (quick != null) quick.close();
         if (bluetooth != null) bluetooth.close();
         if (notices != null) notices.close();
