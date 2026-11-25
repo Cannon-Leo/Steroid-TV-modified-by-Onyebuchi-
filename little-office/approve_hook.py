@@ -15,9 +15,17 @@ BASE = "http://127.0.0.1:8765"
 HOLD = 240
 
 # Always decided at the computer, never from the sofa.
-RISKY = re.compile(r"\bsudo\b|\brm\s+-[a-z]*r[a-z]*f|\brm\s+-[a-z]*f[a-z]*r|git\s+push\b.*(--force|-f\b)|"
-                   r"\|\s*(ba|z)?sh\b|\bmkfs|\bdd\s+if=|chmod\s+-R\s+777|\.ssh/|\.env\b|keychain|"
-                   r"git\s+reset\s+--hard|DROP\s+(TABLE|DATABASE)|\bshutdown\b|\breboot\b", re.I)
+RISKY = re.compile(
+    r"\bsudo\b|\brm\s+-[a-z]*r[a-z]*f|\brm\s+-[a-z]*f[a-z]*r|git\s+push\b.*(--force|-f\b)|"
+    r"\|\s*(ba|z)?sh\b|\|\s*(python3?|node|perl|ruby|iex|powershell|pwsh)\b|\bmkfs|\bdd\s+if=|chmod\s+-R\s+777|"
+    r"git\s+reset\s+--hard|git\s+clean\s+-[a-z]*f|DROP\s+(TABLE|DATABASE)|\bshutdown\b|\breboot\b|"
+    # secrets and keys
+    r"[/\\]\.ssh[/\\]|\bid_(rsa|ed25519)|\.env\b|keychain|[/\\]\.aws[/\\]|[/\\]\.gnupg|\.npmrc|\.netrc|credentials|"
+    # the agent changing its own guardrails (hooks, settings, Little Office itself)
+    r"\.claude[/\\]settings|\.little-office|approve_hook|notify_hook|hooks\.py|\.codex[/\\]config|"
+    # publishing and Windows destructive forms
+    r"\bnpm\s+publish\b|\btwine\s+upload\b|Remove-Item\b.*-Recurse|\brd\s+/s\b|\bdel\s+/[sq]|\bformat\s+[a-z]:|"
+    r"Invoke-Expression|\biex\b|Set-ExecutionPolicy|reg\s+(add|delete)\b|--dangerously", re.I)
 
 
 def call(method, path, body=None, timeout=35):

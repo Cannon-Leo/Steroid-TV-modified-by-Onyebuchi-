@@ -237,15 +237,21 @@ public class Home extends Activity {
         clock.setLetterSpacing(-0.02f);
         clock.setShadowLayer(Ui.px(14), 0, Ui.px(2), 0x99000000);
         time.addView(clock);
-        seconds = Ui.text(this, Ui.serif, 30, 0xB3FFFFFF); // small seconds beside the big time
+        // beside the big time, one fixed width column: am/pm raised like a superscript at the top of
+        // the digits, the seconds on the baseline under it (fixed size: ticking never re-lays out the page)
+        LinearLayout side = new LinearLayout(this);
+        side.setOrientation(LinearLayout.VERTICAL);
+        meridiem = Ui.text(this, Ui.serifItalic, 22, 0xB3FFFFFF);
+        meridiem.setPadding(Ui.px(3), Ui.px(17), 0, 0);
+        meridiem.setShadowLayer(Ui.px(8), 0, Ui.px(1), 0x99000000);
+        side.addView(meridiem);
+        side.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1f));
+        seconds = Ui.text(this, Ui.serif, 30, 0xB3FFFFFF);
         seconds.setPadding(Ui.px(2), 0, 0, Ui.px(13));
         seconds.setShadowLayer(Ui.px(8), 0, Ui.px(1), 0x99000000);
-        // fixed size, so the text changing every second never re-lays out the page
-        time.addView(seconds, new LinearLayout.LayoutParams(Ui.px(52), Ui.px(48)));
         seconds.setGravity(Gravity.BOTTOM | Gravity.START);
-        meridiem = Ui.text(this, Ui.serifItalic, 26, 0xB3FFFFFF);
-        meridiem.setPadding(Ui.px(8), 0, 0, Ui.px(14));
-        time.addView(meridiem);
+        side.addView(seconds, new LinearLayout.LayoutParams(Ui.px(52), Ui.px(48)));
+        time.addView(side, new LinearLayout.LayoutParams(Ui.px(52), LinearLayout.LayoutParams.MATCH_PARENT));
         timeRow = time;
         left.addView(time);
         LinearLayout who = new LinearLayout(this);

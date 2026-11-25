@@ -7,8 +7,12 @@ and the normal prompt appears on the computer, so nothing ever runs without some
 
 Security
   Pairing: the TV asks to pair; this computer shows an 8 digit code on its own screen; the code is
-  typed on the TV. The code never crosses the network: the TV proves it with an HMAC, and the
-  device token comes back encrypted with a key derived from the code. 3 wrong tries end the attempt.
+  typed on the TV. The code never crosses the network. The TV and this computer first agree a fresh
+  secret with Diffie Hellman (RFC 3526 group 14, 2048 bit), and the pairing key is that secret plus
+  the code: someone recording the Wi-Fi can't test codes offline, and the device token comes back
+  encrypted with that key. 3 wrong tries end the attempt.
+  Answers: the list of requests a TV shows is signed for that TV and tied to its request, so nobody
+  on the network can change what you are approving.
   Requests: every TV call is signed (HMAC SHA256 of method, path, time, nonce and body with the
   device token). Old (over 90 s) or repeated requests are refused. Private network addresses only.
   Tokens expire after 90 days. `office.py devices` lists them,
@@ -78,6 +82,14 @@ def paired_devices():
     return {k: v for k, v in _load().items() if v.get("expires", 0) > now}
 
 
+# Diffie Hellman, RFC 3526 group 14 (2048 bit safe prime, generator 2)
+DH_P = int("FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA63B139B22514A08798E3404DDEF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7EDEE386BFB5A899FA5AE9F24117C4B1FE649286651ECE45B3DC2007CB8A163BF0598DA48361C55D39A69163FA8FD24CF5F83655D23DCA3AD961C62F356208552BB9ED529077096966D670C354E4ABC9804F1746C08CA18217C32905E462E36CE3BE39E772C180E86039B2783A2EC07A28FB5C55DF06F4C52C9DE2BCBF6955817183995497CEA956AE515D2261898FA051015728E5A8AACAA68FFFFFFFFFFFFFFFF", 16)
+
+
+def _dh_ok(x):
+    return 1 < x < DH_P - 1
+
+
 def _mac(key, msg):
     return hmac.new(key, msg.encode(), hashlib.sha256).digest()
 
@@ -112,13 +124,19 @@ def pair_start(body, ip=""):
     if len(paired_devices()) >= MAX_DEVICES and b["device"] not in paired_devices():
         audit("pair_refused", ip=ip, why="too many devices")
         return 409, {"error": "too many paired TVs; revoke one on the computer"}
+    tv_pub = int(b["pub"], 16)
+    if not _dh_ok(tv_pub):
+        return 400, {"error": "bad request"}
+    mine = secrets.randbelow(DH_P - 3) + 2
+    shared = pow(tv_pub, mine, DH_P).to_bytes(256, "big")
     code = "".join(secrets.choice("0123456789") for _ in range(8))
     with lock:
         pairing.clear()  # one pairing at a time
-        pairing[b["device"]] = {"code": code, "nonce": b["nonce"], "name": b["name"], "days": DAYS, "at": time.time(), "tries": 0, "ip": ip}
+        pairing[b["device"]] = {"code": code, "nonce": b["nonce"], "name": b["name"], "days": DAYS, "at": time.time(),
+                                "tries": 0, "ip": ip, "key": hashlib.sha256(shared + code.encode()).digest()}
     audit("pair_start", ip=ip, name=b["name"])
     show_code(b["name"].replace('"', ""), code)
-    return 200, {"ok": True, "ttl": PAIR_TTL}
+    return 200, {"ok": True, "ttl": PAIR_TTL, "pub": format(pow(2, mine, DH_P), "0512x")}
 
 
 def pair_finish(body, ip=""):
@@ -131,7 +149,7 @@ def pair_finish(body, ip=""):
         if not p or time.time() - p["at"] > PAIR_TTL:
             pairing.pop(device, None)
             return 410, {"error": "expired"}
-        key = p["code"].encode()
+        key = p["key"]
         want = _mac(key, f"pair|{device}|{p['nonce']}").hex()
         if not hmac.compare_digest(want, proof):
             p["tries"] += 1
@@ -155,6 +173,20 @@ def pair_finish(body, ip=""):
 
 def verify(method, path, headers, body_text):
     """Returns the device id when the request is signed by a paired, unexpired TV, else None."""
+    v = verify_full(method, path, headers, body_text)
+    return v[0] if v else None
+
+
+def sign_reply(device, nonce, path, body):
+    """Signature for an answer to a paired TV, tied to its request's nonce (no replays, no edits)."""
+    dev = paired_devices().get(device)
+    if not dev:
+        return ""
+    return hmac.new(bytes.fromhex(dev["token"]), f"reply\n{path}\n{nonce}\n".encode() + body, hashlib.sha256).hexdigest()
+
+
+def verify_full(method, path, headers, body_text):
+    """(device id, nonce) when the request is signed by a paired, unexpired TV, else None."""
     ok, h = schema.SIGNED_HEADERS.safe_parse({"device": headers.get("X-LO-Device"), "time": headers.get("X-LO-Time"),
                                               "nonce": headers.get("X-LO-Nonce"), "sig": headers.get("X-LO-Sig")})
     if not ok:
@@ -174,7 +206,7 @@ def verify(method, path, headers, body_text):
         if h["nonce"] in seen_nonces or len(seen_nonces) > 10000:
             return None   # replayed (or flooded)
         seen_nonces[h["nonce"]] = now
-    return h["device"]
+    return h["device"], h["nonce"]
 
 
 def count():

@@ -95,7 +95,8 @@ class Object(Schema):
 HEX = lambda n: String(n, n, f"[0-9a-f]{{{n}}}")
 
 # ---- the schemas the service accepts ----
-PAIR_START = Object(device=HEX(32), nonce=HEX(32), name=String(1, 40, r"[\w .'’\-]+"), days=Int(1, 90).optional(90))
+PAIR_START = Object(device=HEX(32), nonce=HEX(32), name=String(1, 40, r"[\w .'’\-]+"), days=Int(1, 90).optional(90),
+                    pub=HEX(512))
 PAIR_FINISH = Object(device=HEX(32), proof=HEX(64))
 DECISION = Object(decision=Enum("allow", "deny"))
 EMPTY = Object()

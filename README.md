@@ -309,9 +309,11 @@ Back leaves it for the computer.
    appears on the computer's screen. A pairing lasts 90 days; the TV warns you a week before and pairs again
    in one step.
 
-Security: the code never crosses the network (the TV proves it with an HMAC and receives its token
-encrypted with it); 3 wrong codes end the attempt; every TV request is signed, time stamped and single use;
-private network only; tokens expire after 90 days.
+Security: the code never crosses the network. Pairing first agrees a fresh secret with Diffie Hellman
+(2048 bit), and the key is that secret plus the code, so recording the Wi‑Fi during pairing gives nothing to
+guess at. 3 wrong codes end the attempt; every TV request is signed, time stamped and single use; the list
+of requests the TV shows is signed back for that TV and that request, so nobody on the network can change
+what you approve; private network only; tokens expire after 90 days. Pair at home, not on shared Wi‑Fi.
 
 Guardrails on the computer:
 - **Strict schemas** (Zod style, `little-office/schema.py`) for every body, header, id and query value:
@@ -326,8 +328,10 @@ Guardrails on the computer:
 paired TVs and `office.py revoke all` removes them.
 
 Safe by default: Reject is selected first; if the TV doesn't answer within 4 minutes the normal prompt
-appears on the computer; commands like `sudo`, `rm -rf`, forced pushes, piping into a shell or touching
-`.env` and `~/.ssh` are never sent to the TV and are always decided at the keyboard.
+appears on the computer. Always decided at the keyboard, never sent to the TV: `sudo`, `rm -rf`, forced
+pushes, `git reset --hard`, piping into a shell or interpreter, secrets (`.env`, `~/.ssh`, `~/.aws`, keys,
+credentials), publishing (`npm publish`), destructive Windows commands, and anything that touches the
+agent's own guardrails (Claude Code settings, Codex config, Little Office and its hooks).
 
 Codex and Antigravity have no permission hook, so they can only notify the TV, not be approved from it.
 

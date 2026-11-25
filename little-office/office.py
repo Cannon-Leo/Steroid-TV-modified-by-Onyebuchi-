@@ -569,10 +569,12 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/approvals/count":
             return self.reply(200, {"n": approvals.count()})
         if path == "/approvals":
-            if not approvals.verify("GET", path, self.headers, ""):
+            v = approvals.verify_full("GET", path, self.headers, "")
+            if not v:
                 guard.failed(ip)
                 return self.reply(401, {"error": "not paired"})
-            return self.reply(200, {"requests": approvals.listing()})
+            # signed for this TV and this request, so nothing on the network can change what is shown
+            return self.reply(200, {"requests": approvals.listing()}, sign=v)
         if path == "/photos" or path.startswith("/photo/"):
             # your photos and profile picture, for paired TVs only (signed requests)
             if not approvals.verify("GET", path, self.headers, ""):
@@ -664,9 +666,11 @@ class Handler(BaseHTTPRequestHandler):
                     break
                 self.wfile.write(b)
 
-    def reply(self, code, obj):
+    def reply(self, code, obj, sign=None):
         body = json.dumps(obj).encode()
         self.send_response(code)
+        if sign:
+            self.send_header("X-LO-Reply", approvals.sign_reply(sign[0], sign[1], urllib.parse.urlparse(self.path).path, body))
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
