@@ -14,7 +14,7 @@ fi
 O="$L/out"; rm -rf "$O"; mkdir -p "$O/classes" "$O/dex"
 # Resources (Lucide icons) first: aapt2 writes R.java, which the code needs.
 "$BT/aapt2" compile --dir "$L/res" -o "$O/res.zip"
-"$BT/aapt2" link -I "$JAR" --manifest "$L/AndroidManifest.xml" -A "$L/assets" -R "$O/res.zip" --java "$O/gen" -o "$O/base.apk"
+"$BT/aapt2" link -I "$JAR" --manifest "$L/AndroidManifest.xml" -A "$L/assets" "$O/res.zip" --java "$O/gen" -o "$O/base.apk"
 # --release 8 (not -source/-target + bootclasspath): lambdas need the JDK's LambdaMetafactory at compile time
 # argument files keep paths with spaces intact
 find "$L/src" "$O/gen" -name '*.java' | sed 's/.*/"&"/' > "$O/sources.txt"
