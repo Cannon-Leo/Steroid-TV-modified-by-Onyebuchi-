@@ -1428,27 +1428,63 @@ public class Home extends Activity {
             PipWatch.full(this, pipPkg);
             return;
         }
-        if (scroll != null) scroll.scrollTo(0, 0);
-        if (firstApp != null) firstApp.requestFocus();
-        // every row back to its start (Spotify, YouTube, apps...), not just the page: again a moment
-        // later too, in case a row was still gliding or got refreshed as home came back
-        resetRows();
-        h.postDelayed(this::resetRows, 250);
-        h.postDelayed(this::resetRows, 900);
+        goHome(hasWindowFocus());
     }
 
-    /** Every horizontal row on the home page snaps back to its first card. */
-    void resetRows() { if (scroll != null) resetRows(scroll); }
+    long homeAt, keyAt;
 
-    static void resetRows(View v) {
+    @Override public boolean dispatchKeyEvent(android.view.KeyEvent e) {
+        if (e.getAction() == android.view.KeyEvent.ACTION_DOWN) keyAt = android.os.SystemClock.uptimeMillis();
+        return super.dispatchKeyEvent(e);
+    }
+
+    /** Home on the remote, any time: panels close, every row slides back to its first card, the page
+     *  goes to the top and the first app is focused. Checked again a moment later (a row still gliding,
+     *  rows rebuilt as home came back, focus taken by something else), unless you've pressed a key since. */
+    void goHome(boolean smooth) {
+        if (tour != null) return;   // the tour keeps its place
+        if (quick != null) quick.close();
+        if (bluetooth != null) bluetooth.close();
+        if (notices != null) notices.close();
+        if (scroll == null) return;
+        scroll.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);  // in case a panel left it blocked
+        homeAt = android.os.SystemClock.uptimeMillis();
+        h.removeCallbacks(homeCheck);
+        scroll.fling(0);                                  // stop the page if it's still gliding
+        resetRows(scroll, smooth);
+        if (smooth) scroll.smoothScrollTo(0, 0); else scroll.scrollTo(0, 0);
+        focusFirst();
+        h.postDelayed(homeCheck, 300);
+        h.postDelayed(homeCheck, 900);
+    }
+
+    final Runnable homeCheck = () -> {
+        if (keyAt > homeAt || scroll == null) return;    // you've started moving: leave it
+        resetRows(scroll, false);
+        if (scroll.getScrollY() != 0) scroll.smoothScrollTo(0, 0);
+        View f = getCurrentFocus();
+        if (f == null || !isIn(f, watchRow) || (firstApp != null && f != firstApp)) focusFirst();
+    };
+
+    void focusFirst() {
+        if (firstApp != null && firstApp.getParent() != null && firstApp.requestFocus()) return;
+        if (watchRow != null && watchRow.getChildCount() > 0) watchRow.getChildAt(0).requestFocus();
+    }
+
+    /** Every horizontal row on the home page back to its first card. */
+    void resetRows() { if (scroll != null) resetRows(scroll, false); }
+
+    static void resetRows(View v, boolean smooth) {
         if (v instanceof android.widget.HorizontalScrollView) {
             android.widget.HorizontalScrollView hs = (android.widget.HorizontalScrollView) v;
-            hs.fling(0);          // stops a glide that's still running
-            hs.scrollTo(0, 0);
+            if (hs.getScrollX() != 0) {
+                hs.fling(0);          // stops a glide that's still running
+                if (smooth) hs.smoothScrollTo(0, 0); else hs.scrollTo(0, 0);
+            }
         }
         if (v instanceof ViewGroup) {
             ViewGroup g = (ViewGroup) v;
-            for (int i = 0; i < g.getChildCount(); i++) resetRows(g.getChildAt(i));
+            for (int i = 0; i < g.getChildCount(); i++) resetRows(g.getChildAt(i), smooth);
         }
     }
 }
