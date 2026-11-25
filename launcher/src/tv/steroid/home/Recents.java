@@ -161,7 +161,7 @@ public class Recents extends Activity {
         LinearLayout p = new LinearLayout(this);
         p.setGravity(Gravity.CENTER_VERTICAL);
         p.setPadding(Ui.px(14), Ui.px(10), Ui.px(16), Ui.px(10));
-        p.setBackground(Ui.round(0x1FFFFFFF, 22));
+        Glass.apply(p, 22, 0x59101014);   // the same frosted glass as the control centre
         FrameLayout disc = new FrameLayout(this);
         disc.setBackground(Ui.round(0x26FFFFFF, 17));
         disc.addView(new Icon(this, Icon.RAM), new FrameLayout.LayoutParams(Ui.px(18), Ui.px(18), Gravity.CENTER));

@@ -2,8 +2,20 @@
 # Installs the launcher, makes it the Home app, grants what its features need, then switches off
 # the stock launchers (only after Steroid Home is confirmed as Home, so the TV is never left without one).
 . "$(dirname "$0")/env.sh"
-APK="$ROOT/launcher/out/SteroidHome.apk"; [ -f "$APK" ] || "$ROOT/scripts/build.sh"
-tv install -r "$APK" | tail -1
+APK="$ROOT/launcher/out/SteroidHome.apk"
+# Never install an old build: if any source, resource or config changed since the last build, build first.
+newer=$([ -f "$APK" ] && find "$ROOT/launcher/src" "$ROOT/launcher/res" "$ROOT/launcher/AndroidManifest.xml" "$ROOT/config" -newer "$APK" -type f -print -quit 2>/dev/null || true)
+if [ ! -f "$APK" ] || [ -n "$newer" ]; then
+  echo "Building the latest version first${newer:+ (changed: ${newer#$ROOT/})}..."
+  "$ROOT/scripts/build.sh" || { echo "BUILD FAILED: nothing was installed (see the error above)"; exit 1; }
+fi
+echo "Installing the build from $(date -r "$APK" '+%d %b %H:%M' 2>/dev/null || stat -f '%Sm' "$APK" 2>/dev/null || echo now)"
+out=$(tv install -r --no-incremental "$APK" 2>&1) || out=$(tv install -r "$APK" 2>&1)
+echo "$out" | tail -1
+echo "$out" | grep -q Success || { echo "INSTALL FAILED: $out" | tail -3; exit 1; }
+# check the TV really has this build (the Home button service only exists in new builds)
+if tv shell dumpsys package tv.steroid.home | tr -d '\r' | grep -q "tv.steroid.home/.HomeKeys"; then echo "On the TV: the newest build"
+else echo "WARNING: the TV still has an older build. Run: scripts/buchi.sh update"; fi
 tv shell cmd package set-home-activity tv.steroid.home/.Home --user 0
 resolve() { tv shell cmd package resolve-activity --brief -c android.intent.category.HOME -a android.intent.action.MAIN | tail -1 | tr -d '\r'; }
 home=$(resolve)
