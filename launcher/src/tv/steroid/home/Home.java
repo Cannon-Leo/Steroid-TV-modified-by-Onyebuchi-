@@ -1430,5 +1430,25 @@ public class Home extends Activity {
         }
         if (scroll != null) scroll.scrollTo(0, 0);
         if (firstApp != null) firstApp.requestFocus();
+        // every row back to its start (Spotify, YouTube, apps...), not just the page: again a moment
+        // later too, in case a row was still gliding or got refreshed as home came back
+        resetRows();
+        h.postDelayed(this::resetRows, 250);
+        h.postDelayed(this::resetRows, 900);
+    }
+
+    /** Every horizontal row on the home page snaps back to its first card. */
+    void resetRows() { if (scroll != null) resetRows(scroll); }
+
+    static void resetRows(View v) {
+        if (v instanceof android.widget.HorizontalScrollView) {
+            android.widget.HorizontalScrollView hs = (android.widget.HorizontalScrollView) v;
+            hs.fling(0);          // stops a glide that's still running
+            hs.scrollTo(0, 0);
+        }
+        if (v instanceof ViewGroup) {
+            ViewGroup g = (ViewGroup) v;
+            for (int i = 0; i < g.getChildCount(); i++) resetRows(g.getChildAt(i));
+        }
     }
 }
