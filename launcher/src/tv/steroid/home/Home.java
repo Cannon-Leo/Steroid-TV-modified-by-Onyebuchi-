@@ -237,21 +237,26 @@ public class Home extends Activity {
         clock.setLetterSpacing(-0.02f);
         clock.setShadowLayer(Ui.px(14), 0, Ui.px(2), 0x99000000);
         time.addView(clock);
-        // beside the big time, one fixed width column: am/pm raised like a superscript at the top of
-        // the digits, the seconds on the baseline under it (fixed size: ticking never re-lays out the page)
+        // beside the big time, one tight fixed width stack: am/pm as a superscript at the top of the
+        // digits, the seconds as a subscript straight under it (fixed size: ticking never re-lays out)
         LinearLayout side = new LinearLayout(this);
         side.setOrientation(LinearLayout.VERTICAL);
-        meridiem = Ui.text(this, Ui.serifItalic, 22, 0xB3FFFFFF);
-        meridiem.setPadding(Ui.px(3), Ui.px(17), 0, 0);
+        side.setPadding(Ui.px(4), Ui.px(24), 0, 0);
+        meridiem = Ui.text(this, Ui.sansMedium, 15, 0xCCFFFFFF);
+        meridiem.setIncludeFontPadding(false);
+        meridiem.setLetterSpacing(0.08f);
+        meridiem.setAllCaps(true);
         meridiem.setShadowLayer(Ui.px(8), 0, Ui.px(1), 0x99000000);
         side.addView(meridiem);
-        side.addView(new View(this), new LinearLayout.LayoutParams(1, 0, 1f));
-        seconds = Ui.text(this, Ui.serif, 30, 0xB3FFFFFF);
-        seconds.setPadding(Ui.px(2), 0, 0, Ui.px(13));
+        seconds = Ui.text(this, Ui.serif, 26, 0xB3FFFFFF);
+        seconds.setIncludeFontPadding(false);
         seconds.setShadowLayer(Ui.px(8), 0, Ui.px(1), 0x99000000);
-        seconds.setGravity(Gravity.BOTTOM | Gravity.START);
-        side.addView(seconds, new LinearLayout.LayoutParams(Ui.px(52), Ui.px(48)));
-        time.addView(side, new LinearLayout.LayoutParams(Ui.px(52), LinearLayout.LayoutParams.MATCH_PARENT));
+        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(Ui.px(46), -2);
+        sl.topMargin = Ui.px(3);
+        side.addView(seconds, sl);
+        LinearLayout.LayoutParams sdl = new LinearLayout.LayoutParams(Ui.px(50), -2);
+        sdl.gravity = Gravity.TOP;   // the row sits on the baseline; this stack hangs from the top of the digits
+        time.addView(side, sdl);
         timeRow = time;
         left.addView(time);
         LinearLayout who = new LinearLayout(this);
@@ -284,7 +289,10 @@ public class Home extends Activity {
                 new Intent(Intent.ACTION_VIEW, TvContract.buildChannelUriForPassthroughInput(in.getId()))));
         }
         sys.addView(iconButton(Icon.WIFI, "Wi-Fi", new Intent(Settings.ACTION_WIFI_SETTINGS)));
-        sys.addView(iconButton(Icon.BLUETOOTH, "Bluetooth", new Intent(Settings.ACTION_BLUETOOTH_SETTINGS)));
+        // Bluetooth opens our own panel: the plain Android Bluetooth screen doesn't exist on this TV
+        btView = iconButton(Icon.BLUETOOTH, "Bluetooth");
+        btView.setOnClickListener(v -> BluetoothPanel.open(this, rootView, scroll));
+        sys.addView(btView);
         sys.addView(iconButton(Icon.SOUND, "Sound", new Intent(Settings.ACTION_SOUND_SETTINGS)));
         // notification centre: every Little Office notice, and approvals you can still answer
         View bell = iconButton(Icon.BELL, "Notifications", new Intent(this, OfficePanel.class));
@@ -701,6 +709,8 @@ public class Home extends Activity {
     boolean showStats;
     QuickPanel quick;
     NoticePanel notices;
+    BluetoothPanel bluetooth;
+    View btView;
     long lastPhotoSync;
     View bellView, bellDot;
     Tour tour;
@@ -1387,7 +1397,8 @@ public class Home extends Activity {
     }
 
     @Override public void onBackPressed() {
-        if (notices != null) notices.close();
+        if (bluetooth != null) bluetooth.close();
+        else if (notices != null) notices.close();
         else if (quick != null) quick.close(); /* otherwise home stays home */
     }
 

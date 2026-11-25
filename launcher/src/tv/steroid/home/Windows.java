@@ -99,10 +99,12 @@ public class Windows extends Activity {
         for (int i = 0; i < Places.MOODS.length; i++) filterRow.addView(filterChip(i));
         col.addView(filterRow);
 
-        // full width with its own side padding: zoomed cards in the first and last column are never clipped
+        // full width with its own side padding. Overflow hidden: scrolled cards stop at the grid's top edge
+        // and never spill over "Where shall we look" and the filter tabs. Cards here don't zoom, so
+        // nothing needs to draw outside the grid.
         ScrollView scroll = new Rails.Page(this, Ui.px(48));
         scroll.setClipToPadding(false);
-        scroll.setClipChildren(false);
+        scroll.setClipChildren(true);
         scroll.setPadding(Ui.px(52), Ui.px(14), Ui.px(52), Ui.px(40));
         grid = new GridLayout(this);
         grid.setColumnCount(4);
@@ -218,14 +220,12 @@ public class Windows extends Activity {
         lp.setMargins(0, Ui.px(8), Ui.px(16), Ui.px(14));
         c.setLayoutParams(lp);
         c.setOnFocusChangeListener((v, f) -> {
-            Ui.lift(art, f, 1.09f);
-            // the focus ring alone marks focus: no second border
+            // no zoom on this screen (it cut the left column's cards); the focus ring alone marks focus
             if (f) ambient.tint(moodHue(i));
         });
         c.setOnClickListener(v -> open(i));
         c.setTag(i);
-        // every card: the picture zooms out to fill the ring's padding, so the ring sits on the image edge
-        // (no dark band between ring and photo, which read as a cut on the left column)
+        // every card: the ring sits on the picture's edge (no dark band between ring and photo)
         Selector.visual(c, art, Ui.px(14), Ui.px(1.5f));
         return c;
     }

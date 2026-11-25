@@ -146,9 +146,10 @@ final class QuickPanel extends FrameLayout {
         first = wide(r1, 0, Icon.WIFI, Icon.WIFI_OFF, "Wi‑Fi",
             () -> wifiOn() || ethernet(), () -> ethernet() ? "Ethernet" : !wifiOn() ? "Off" : wifiConnected() ? "Connected" : "Not connected",
             () -> open(new Intent(Settings.ACTION_WIFI_SETTINGS)), () -> open(new Intent(Settings.ACTION_WIFI_SETTINGS)));
+        // Bluetooth stays on (the remote uses it): OK opens the Bluetooth panel with every device
         wide(r1, G, Icon.BLUETOOTH, Icon.BT_OFF, "Bluetooth",
-            QuickPanel::btOn, () -> btOn() ? "On" : "Off",
-            this::flipBluetooth, () -> open(new Intent(Settings.ACTION_BLUETOOTH_SETTINGS)));
+            QuickPanel::btOn, () -> !btOn() ? "Off" : btConnected() == 0 ? "On" : "On · " + btConnected() + " connected",
+            this::openBluetooth, this::openBluetooth);
 
         // 2. now playing | volume | background
         LinearLayout r2 = row(G);
@@ -449,13 +450,14 @@ final class QuickPanel extends FrameLayout {
 
     void np(int key) { NowPlaying n = home.nowPlaying; if (n != null && n.active) n.key(key); }
 
-    void flipBluetooth() {
+    void openBluetooth() { BluetoothPanel.open(home, home.rootView, home.quickPage != null ? home.quickPage : home.scroll); }
+
+    static int btConnected() {
         BluetoothAdapter b = BluetoothAdapter.getDefaultAdapter();
-        try {
-            if (b == null) throw new IllegalStateException();
-            boolean ok = b.isEnabled() ? b.disable() : b.enable();
-            if (!ok) throw new IllegalStateException();
-        } catch (Exception e) { open(new Intent(Settings.ACTION_BLUETOOTH_SETTINGS)); }
+        int n = 0;
+        try { if (b != null && b.isEnabled()) for (android.bluetooth.BluetoothDevice d : b.getBondedDevices()) if (BluetoothPanel.connected(d)) n++; }
+        catch (Throwable ignored) {}
+        return n;
     }
 
     void open(Intent i) {
