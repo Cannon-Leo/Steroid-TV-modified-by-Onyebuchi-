@@ -44,24 +44,47 @@ public class Recents extends Activity {
     static android.graphics.Bitmap backdrop;
     static long backdropAt;
 
-    /** Every way in (top icon, control centre, holding Home) comes through here. */
+    static Recents showing;
+
+    /** Every way in (top icon, control centre) comes through here. Holding Home starts it directly. */
     static void open(Context c) {
-        Home hm = Home.live;
-        if (hm != null && hm.resumed) {
-            try {
-                View d = hm.getWindow().getDecorView();
-                int w = Math.max(1, d.getWidth() / 10), hh = Math.max(1, d.getHeight() / 10);
-                android.graphics.Bitmap b = android.graphics.Bitmap.createBitmap(w, hh, android.graphics.Bitmap.Config.ARGB_8888);
-                android.graphics.Canvas cv = new android.graphics.Canvas(b);
-                cv.scale(w / (float) d.getWidth(), hh / (float) d.getHeight());
-                d.draw(cv);
-                // shrink again and scale back up: a wide, smooth blur for almost nothing
-                android.graphics.Bitmap tiny = android.graphics.Bitmap.createScaledBitmap(b, Math.max(1, w / 3), Math.max(1, hh / 3), true);
-                backdrop = android.graphics.Bitmap.createScaledBitmap(tiny, w * 2, hh * 2, true);
-                backdropAt = System.currentTimeMillis();
-            } catch (Throwable e) { backdrop = null; }
-        } else backdrop = null;
+        captureHome();
         c.startActivity(new Intent(c, Recents.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_ANIMATION));
+    }
+
+    /**
+     * A blurred picture of the home screen for the glass, when Recent apps opens over it. PixelCopy
+     * reads the screen on the GPU and answers a moment later, so nothing waits on it (a slow capture
+     * once delayed the Home button). Over other apps there is none: Android 11 can't capture or blur
+     * another app's window, so the glass is a denser frosted tint there.
+     */
+    static void captureHome() {
+        Home hm = Home.live;
+        backdrop = null;
+        if (hm == null || !hm.resumed || android.os.Build.VERSION.SDK_INT < 26) return;
+        View d = hm.getWindow().getDecorView();
+        if (d.getWidth() == 0) return;
+        final android.graphics.Bitmap small = android.graphics.Bitmap.createBitmap(Math.max(1, d.getWidth() / 24),
+            Math.max(1, d.getHeight() / 24), android.graphics.Bitmap.Config.ARGB_8888);
+        android.view.PixelCopy.request(hm.getWindow(), small, result -> {
+            if (result != android.view.PixelCopy.SUCCESS) return;
+            try {
+                backdrop = android.graphics.Bitmap.createScaledBitmap(small, small.getWidth() * 4, small.getHeight() * 4, true);
+                backdropAt = System.currentTimeMillis();
+                Recents r = showing;
+                if (r != null) r.applyBackdrop();
+            } catch (Throwable ignored) {}
+        }, new Handler(Looper.getMainLooper()));
+    }
+
+    GradientDrawable tintBlur, tintSolid;
+
+    void applyBackdrop() {
+        if (root == null || backdrop == null || System.currentTimeMillis() - backdropAt > 4000) return;
+        android.graphics.drawable.BitmapDrawable bd = new android.graphics.drawable.BitmapDrawable(getResources(), backdrop);
+        bd.setFilterBitmap(true);
+        root.setBackground(new android.graphics.drawable.LayerDrawable(new Drawable[]{bd, tintBlur}));
+        backdrop = null;
     }
 
     final List<Item> items = new ArrayList<>();
@@ -82,16 +105,13 @@ public class Recents extends Activity {
         root = new FrameLayout(this);
         root.setClipChildren(false);
         // the app behind stays faintly visible: dark glass, deeper at the bottom where the controls are
-        boolean blur = backdrop != null && System.currentTimeMillis() - backdropAt < 4000;
-        GradientDrawable tint = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, blur
-            ? new int[]{0xA60A0B10, 0xB8070809, 0xD9040406}      // over the blurred home screen
-            : new int[]{0xE60A0B10, 0xEE07080B, 0xF5040406});    // over another app: denser frosted glass
-        if (blur) {
-            android.graphics.drawable.BitmapDrawable bd = new android.graphics.drawable.BitmapDrawable(getResources(), backdrop);
-            bd.setFilterBitmap(true);
-            root.setBackground(new android.graphics.drawable.LayerDrawable(new Drawable[]{bd, tint}));
-        } else root.setBackground(tint);
-        backdrop = null;
+        tintBlur = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{0xA60A0B10, 0xB8070809, 0xD9040406});     // over the blurred home screen
+        tintSolid = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{0xE60A0B10, 0xEE07080B, 0xF5040406});     // over another app: denser frosted glass
+        root.setBackground(tintSolid);
+        showing = this;
+        applyBackdrop();   // if the home screen picture is already here; else it arrives in a moment
 
         // ---- top: title and count left, memory right ----
         FrameLayout top = new FrameLayout(this);
@@ -178,7 +198,7 @@ public class Recents extends Activity {
     }
 
     @Override protected void onNewIntent(Intent i) { super.onNewIntent(i); load(); }   // held Home again: refresh
-    @Override protected void onDestroy() { h.removeCallbacksAndMessages(null); super.onDestroy(); }
+    @Override protected void onDestroy() { if (showing == this) showing = null; h.removeCallbacksAndMessages(null); super.onDestroy(); }
 
     @Override public void onBackPressed() { leave(); }
 

@@ -20,8 +20,11 @@ public class HomeKeys extends AccessibilityService {
 
     final Runnable hold = () -> {
         held = true;
+        // never any heavy work here: the system waits on this service for every Home press
+        try { Recents.captureHome(); } catch (Throwable ignored) {}   // async, returns at once
         try {
-            Recents.open(this);
+            startActivity(new Intent(this, Recents.class)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_ANIMATION));
         } catch (Exception e) { held = false; }   // couldn't open: the release still goes Home
     };
 
