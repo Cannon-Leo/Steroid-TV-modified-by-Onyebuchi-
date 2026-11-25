@@ -131,6 +131,7 @@ public class Home extends Activity {
     SystemStats stats;
     Selector selector;
     boolean resumed;
+    static Home live;   // the home screen while it's on screen (Recent apps blurs it as its backdrop)
     android.animation.ObjectAnimator breathe;
 
     @Override public void onRequestPermissionsResult(int code, String[] perms, int[] res) {
@@ -280,7 +281,9 @@ public class Home extends Activity {
         sys.addView(iconButton(Icon.ASSIST, "Assistant", new Intent(Intent.ACTION_ASSIST),
             new Intent("android.intent.action.VOICE_ASSIST"), new Intent(Intent.ACTION_SEARCH_LONG_PRESS),
             new Intent("android.search.action.GLOBAL_SEARCH")));
-        sys.addView(iconButton(Icon.RECENTS, "Recent apps", new Intent(this, Recents.class)));
+        View rec = iconButton(Icon.RECENTS, "Recent apps");
+        rec.setOnClickListener(v -> Recents.open(this));   // same overlay as holding Home
+        sys.addView(rec);
         TvInputManager tim = (TvInputManager) getSystemService(Context.TV_INPUT_SERVICE);
         if (tim != null) for (TvInputInfo in : tim.getTvInputList()) {
             if (in.getType() != TvInputInfo.TYPE_HDMI || in.isHidden(this)) continue;
@@ -1345,6 +1348,7 @@ public class Home extends Activity {
         super.onResume();
         if (Prefs.layoutVersion(this) != layoutVersion) { recreate(); return; } // arrangement changed
         resumed = true;
+        live = this;
         tick.run();
         ambient.reload();
         loadAvatar();
@@ -1389,6 +1393,7 @@ public class Home extends Activity {
         h.removeCallbacks(pipPoll);
         super.onPause();
         resumed = false;
+        if (live == this) live = null;
         h.removeCallbacks(officeTick);
         h.removeCallbacks(tick);
         ambient.run(false);

@@ -39,6 +39,31 @@ public class Recents extends Activity {
 
     static final class Item { Apps.App app; long used; LinearLayout view; View ring, shade; TextView name, when; ImageView icon; }
 
+    /** A soft, blurred picture of the home screen, when Recent apps opens over it. Android 11 can't blur
+     *  another app's window, so over other apps the glass is a denser frosted tint instead. */
+    static android.graphics.Bitmap backdrop;
+    static long backdropAt;
+
+    /** Every way in (top icon, control centre, holding Home) comes through here. */
+    static void open(Context c) {
+        Home hm = Home.live;
+        if (hm != null && hm.resumed) {
+            try {
+                View d = hm.getWindow().getDecorView();
+                int w = Math.max(1, d.getWidth() / 10), hh = Math.max(1, d.getHeight() / 10);
+                android.graphics.Bitmap b = android.graphics.Bitmap.createBitmap(w, hh, android.graphics.Bitmap.Config.ARGB_8888);
+                android.graphics.Canvas cv = new android.graphics.Canvas(b);
+                cv.scale(w / (float) d.getWidth(), hh / (float) d.getHeight());
+                d.draw(cv);
+                // shrink again and scale back up: a wide, smooth blur for almost nothing
+                android.graphics.Bitmap tiny = android.graphics.Bitmap.createScaledBitmap(b, Math.max(1, w / 3), Math.max(1, hh / 3), true);
+                backdrop = android.graphics.Bitmap.createScaledBitmap(tiny, w * 2, hh * 2, true);
+                backdropAt = System.currentTimeMillis();
+            } catch (Throwable e) { backdrop = null; }
+        } else backdrop = null;
+        c.startActivity(new Intent(c, Recents.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_ANIMATION));
+    }
+
     final List<Item> items = new ArrayList<>();
     final Handler h = new Handler(Looper.getMainLooper());
     FrameLayout root, stack, closeAll;
@@ -57,8 +82,16 @@ public class Recents extends Activity {
         root = new FrameLayout(this);
         root.setClipChildren(false);
         // the app behind stays faintly visible: dark glass, deeper at the bottom where the controls are
-        root.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{0xD908090D, 0xE6060709, 0xF2040406}));
+        boolean blur = backdrop != null && System.currentTimeMillis() - backdropAt < 4000;
+        GradientDrawable tint = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, blur
+            ? new int[]{0xA60A0B10, 0xB8070809, 0xD9040406}      // over the blurred home screen
+            : new int[]{0xE60A0B10, 0xEE07080B, 0xF5040406});    // over another app: denser frosted glass
+        if (blur) {
+            android.graphics.drawable.BitmapDrawable bd = new android.graphics.drawable.BitmapDrawable(getResources(), backdrop);
+            bd.setFilterBitmap(true);
+            root.setBackground(new android.graphics.drawable.LayerDrawable(new Drawable[]{bd, tint}));
+        } else root.setBackground(tint);
+        backdrop = null;
 
         // ---- top: title and count left, memory right ----
         FrameLayout top = new FrameLayout(this);
@@ -79,7 +112,7 @@ public class Recents extends Activity {
         stack = new Stack(this);
         stack.setClipChildren(false);
         FrameLayout.LayoutParams sl = new FrameLayout.LayoutParams(-1, Ui.px(H + 60), Gravity.CENTER);
-        sl.topMargin = -Ui.px(6);
+        sl.topMargin = -Ui.px(30);   // clear of Close all and its hint below
         root.addView(stack, sl);
 
         emptyBox = new LinearLayout(this);
@@ -127,15 +160,15 @@ public class Recents extends Activity {
         cl.setText("Close all");
         cl.setPadding(0, Ui.px(8), 0, 0);
         bottom.addView(cl);
-        FrameLayout.LayoutParams bl = new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
-        bl.bottomMargin = Ui.px(34);
-        root.addView(bottom, bl);
-
+        // the keys, centred under Close all (never over it)
         hint = Ui.text(this, Ui.sans, 12, 0x99FFFFFF);
         hint.setText("Left and right to browse  ·  Up to close an app  ·  OK to open  ·  hold OK for options");
-        FrameLayout.LayoutParams hl = new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.START);
-        hl.setMargins(Ui.px(56), 0, 0, Ui.px(54));
-        root.addView(hint, hl);
+        hint.setGravity(Gravity.CENTER);
+        hint.setPadding(0, Ui.px(14), 0, 0);
+        bottom.addView(hint);
+        FrameLayout.LayoutParams bl = new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+        bl.bottomMargin = Ui.px(22);
+        root.addView(bottom, bl);
 
         setContentView(root);
         root.setAlpha(0f);
@@ -254,7 +287,6 @@ public class Recents extends Activity {
         if (items.isEmpty()) { showEmpty(null, null); return; }
         emptyBox.setVisibility(View.GONE);
         bottom.setVisibility(View.VISIBLE);
-        hint.setVisibility(View.VISIBLE);
         layoutStack(false);
         stack.requestFocus();
         counts();
@@ -268,7 +300,6 @@ public class Recents extends Activity {
         emptyBox.setAlpha(0f);
         emptyBox.animate().alpha(1f).setDuration(220).start();
         bottom.setVisibility(View.INVISIBLE);
-        hint.setVisibility(View.INVISIBLE);
         count.setText("Nothing open");
     }
 

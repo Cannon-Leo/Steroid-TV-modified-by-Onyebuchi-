@@ -21,8 +21,7 @@ public class HomeKeys extends AccessibilityService {
     final Runnable hold = () -> {
         held = true;
         try {
-            startActivity(new Intent(this, Recents.class)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_ANIMATION));
+            Recents.open(this);
         } catch (Exception e) { held = false; }   // couldn't open: the release still goes Home
     };
 

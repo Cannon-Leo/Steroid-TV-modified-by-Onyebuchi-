@@ -173,7 +173,7 @@ final class QuickPanel extends FrameLayout {
         cap.setPadding(Ui.px(14), 0, Ui.px(14), 0);
         cap.setBackground(Ui.round(OFF, 32));
         ((LinearLayout.LayoutParams) cap.getLayoutParams()).height = Ui.px(92);
-        capsule(cap, Icon.RECENTS, "Recent apps", () -> open(new Intent(c, Recents.class)));
+        capsule(cap, Icon.RECENTS, "Recent apps", () -> { close(); home.h.postDelayed(() -> Recents.open(home), 180); });
         capsule(cap, Icon.INPUT, "Inputs", () -> open(new Intent("android.settings.TV_INPUT_SETTINGS")));
         capsule(cap, Icon.MONITOR, "Display", () -> open(new Intent(Settings.ACTION_DISPLAY_SETTINGS)));
         capsule(cap, Icon.ELLIPSIS, "All settings", () -> open(new Intent(Settings.ACTION_SETTINGS)));
