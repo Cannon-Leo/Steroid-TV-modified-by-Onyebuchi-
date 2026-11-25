@@ -6,6 +6,7 @@ needed.
 | Screen | Controls |
 |---|---|
 | **Home** | D-pad to move (the page scrolls), OK to open. Home always returns to the top. Pills top-right: HDMI inputs, Wi-Fi, Bluetooth, Sound, Settings. Retro TV's decade tiles open that decade directly. |
+| **Recent apps** (hold Home anywhere, or the top icon) | ◀ ▶ browse the stack · ▲ close that app · OK open · hold OK options · ▼ Close all · Back leave. Memory in use top right, and what closing freed |
 | **Retro TV** | ◀ ▶ channel · ▲ ▼ category · OK pause/resume · hold OK (or ☰ menu) guide · Back home |
 | **Retro TV guide** | D-pad to choose decade, category or (Science) channel; OK tunes right away; Back closes |
 | **Radio – stations** | D-pad + OK to play. The "On air" box opens Now Playing. Back home |

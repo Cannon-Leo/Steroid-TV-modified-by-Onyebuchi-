@@ -55,6 +55,13 @@ case "$1" in
     tv shell pm grant tv.steroid.home com.android.providers.tv.permission.READ_EPG_DATA 2>/dev/null && echo "Up next: allowed" || echo "Up next: permission refused (row stays hidden)"
     tv shell cmd notification allow_listener tv.steroid.home/tv.steroid.home.NotifListener && echo "Music widget: allowed"
     tv shell appops set tv.steroid.home GET_USAGE_STATS allow && echo "Recent apps: allowed"
+    # hold Home for Recent apps: switch on Steroid's Home button service, keeping any others already on
+    S=tv.steroid.home/tv.steroid.home.HomeKeys
+    have=$(tv shell settings get secure enabled_accessibility_services | tr -d '\r')
+    case "$have" in *"$S"*) ;; null|"") tv shell settings put secure enabled_accessibility_services "$S" ;;
+      *) tv shell settings put secure enabled_accessibility_services "$have:$S" ;; esac
+    tv shell settings put secure accessibility_enabled 1 && echo "Hold Home for Recent apps: on"
+    grep -q "enabled_accessibility_services" "$R" 2>/dev/null || echo "tv shell settings put secure enabled_accessibility_services '${have/null/}'" >> "$R"
     tv shell am force-stop tv.steroid.home; tv shell input keyevent KEYCODE_HOME
     echo "DONE: Steroid is Home" ;;
   clean) keepfile; scripts/debloat.sh backup/keep.txt ;;

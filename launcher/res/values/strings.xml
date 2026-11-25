@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_keys_description">Hold Home on the remote to open Recent apps. Steroid sees only key presses and only acts on the Home button.</string>
+</resources>
