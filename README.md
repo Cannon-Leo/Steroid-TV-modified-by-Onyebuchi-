@@ -220,6 +220,11 @@ On the TV, choose **Allow** if it asks about TV listings. Run the same command a
 | `scripts/buchi.sh pip full` | a mini player stuck on screen: back to full screen (`pip close` closes it) |
 | `scripts/buchi.sh photos <folder>` | push your photos (and `profile.jpg`) to the TV |
 | `scripts/buchi.sh tune` | offline photo screensaver, ad id off |
+| `scripts/buchi.sh connect` | find and connect to the TV, no address needed |
+| `scripts/buchi.sh homekeys` | switch "hold Home for Recent apps" back on (the launcher normally does this itself) |
+| `scripts/buchi.sh localsend [apk]` | install LocalSend, to send files to the TV from your phone, Mac or PC. Put the **armeabi‑v7a** APK in `personal/apps/` and `update` installs it for you |
+| `scripts/buchi.sh demo` | record a 30 second tour of the TV for posts, into `personal/demo` |
+| `scripts/buchi.sh adb <args>` | run adb on the TV without installing it |
 | `scripts/diag.sh` | 11 screenshots and logs from the TV into `diag/` |
 | `scripts/shot.sh` | one screenshot of the TV right now: `diag/now.png` |
 | `scripts/buchi.sh undo` | put everything back (re-enables apps and the stock launcher) |
