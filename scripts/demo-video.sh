@@ -1,6 +1,7 @@
 #!/bin/bash
 # Records a ~30 second tour of Steroid TV for posts: home rails, control centre, Bluetooth,
-# notifications, The World's Windows, Radio and the photo screensaver.
+# notifications, The World's Windows and Radio. (Android TV won't start a screensaver on
+# command, so record that one by hand.)
 # Usage: scripts/demo-video.sh [720]  -> personal/demo/steroid-demo.mp4 (16:9) and steroid-demo-square.mp4
 # It only opens Steroid's own screens and moves focus; it never presses OK on another app.
 # The result goes in personal/ (never uploaded to GitHub): it shows your home screen and photos.
@@ -12,7 +13,6 @@ OUT="$ROOT/personal/demo"; mkdir -p "$OUT"
 H="tv.steroid.home"
 k() { tv shell input keyevent "$@" >/dev/null; }
 panel() { tv shell am start -n "$H/.Home" --es open "$1" >/dev/null 2>&1; }
-act() { tv shell am start -n "$H/.$1" >/dev/null 2>&1; }
 
 echo "Getting ready..."
 k KEYCODE_HOME; sleep 2
@@ -30,13 +30,11 @@ panel bluetooth; sleep 3                     # Bluetooth panel
 k KEYCODE_BACK; sleep 0.6
 panel notices; sleep 2.6                     # notification centre
 k KEYCODE_BACK; sleep 0.6
-act Windows; sleep 2.6                      # The World's Windows
+panel windows; sleep 2.6                      # The World's Windows
 k KEYCODE_DPAD_DOWN; sleep 0.9; k KEYCODE_DPAD_RIGHT; sleep 0.9; k KEYCODE_DPAD_RIGHT; sleep 1
 k KEYCODE_BACK; sleep 0.6
-act Radio; sleep 3                          # Radio
+panel radio; sleep 3                          # Radio
 k KEYCODE_HOME; sleep 0.8
-# photo screensaver: Android's own "start screensaver" screen, or ask the dream service directly
-tv shell am start -n com.android.systemui/.Somnambulator >/dev/null 2>&1 || tv shell service call dreams 1 >/dev/null 2>&1
 sleep 4
 tv shell pkill -INT screenrecord >/dev/null 2>&1   # tour done: stop recording (adb is slower than the plan, so it runs long)
 wait $REC

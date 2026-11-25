@@ -1408,7 +1408,7 @@ public class Home extends Activity {
     /** Pressing Home on the remote always lands at the top, on the first app. */
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
-        // scripts/demo-video.sh opens a panel directly (am start ... --es open quick|bluetooth|notices),
+        // scripts/demo-video.sh opens a panel directly (am start ... --es open quick|bluetooth|notices|windows|radio),
         // so a recording never has to press OK on whatever happens to be focused
         String open = intent.getStringExtra("open");
         if (open != null && rootView != null && scroll != null) {
@@ -1418,6 +1418,8 @@ public class Home extends Activity {
             if (open.equals("quick")) { quickFrom = null; QuickPanel.open(this, rootView, scroll); }
             else if (open.equals("bluetooth")) BluetoothPanel.open(this, rootView, scroll);
             else if (open.equals("notices")) NoticePanel.open(this, rootView, scroll);
+            else if (open.equals("windows")) startActivity(new Intent(this, Windows.class));
+            else if (open.equals("radio")) startActivity(new Intent(this, Radio.class));
             return;
         }
         // Home pressed while you're already on the home screen and an app floats in a mini player:
