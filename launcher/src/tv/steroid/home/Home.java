@@ -105,7 +105,7 @@ public class Home extends Activity {
         if (Config.feature("littleOffice")) OfficeService.start(this);
         Photos.changed = () -> { avatarFor = ""; loadAvatar(); ambient.reload(); }; // photos synced from the computer
         selector = Selector.attach(this, root); // one gliding focus ring above everything
-        History.listener = () -> { if (resumed) { for (Shelf sh : shelves) sh.refresh(); fillIdle(); } }; // rows update as you watch
+        History.listener = () -> { if (resumed) { for (Shelf sh : shelves) sh.refresh(); if (recent != null) recent.refresh(); fillIdle(); } }; // rows update as you watch
         setContentView(root);
         rebuildApps();
         if (!Prefs.on(this, "tourDone", false)) h.postDelayed(this::startTour, 1500); // first time only
@@ -128,6 +128,7 @@ public class Home extends Activity {
     int layoutVersion;
     LinearLayout shelvesBox;
     final List<Shelf> shelves = new ArrayList<>();
+    HistoryRow recent;   // "Recently played on this TV", every app, below Spotify
     SystemStats stats;
     Selector selector;
     boolean resumed;
@@ -614,6 +615,7 @@ public class Home extends Activity {
                 }
             }
             for (Shelf sh : shelves) sh.refresh();
+            placeRecent();
         }
 
         // My apps: your own row, with a + card to add more
@@ -679,6 +681,25 @@ public class Home extends Activity {
         String t = l.get(i); l.set(i, l.get(j)); l.set(j, t);
         Prefs.list(this, key, l);
         rebuildApps();
+    }
+
+    /** "Recently played on this TV" sits right below Spotify's row (or after the video rows without Spotify). */
+    void placeRecent() {
+        if (shelvesBox == null) return;
+        if (recent == null) recent = new HistoryRow(this, videoScale);
+        int at = -1;
+        for (int i = 0; i < shelvesBox.getChildCount(); i++) {
+            View v = shelvesBox.getChildAt(i);
+            if (v != recent && v instanceof Shelf && "com.spotify.tv.android".equals(((Shelf) v).pkg)) at = i + 1;
+        }
+        int now = shelvesBox.indexOfChild(recent);
+        if (at < 0) at = shelvesBox.getChildCount() - (now >= 0 ? 1 : 0);
+        else if (now >= 0 && now < at) at--;
+        if (now != at) {
+            if (now >= 0) shelvesBox.removeView(recent);
+            shelvesBox.addView(recent, Math.min(at, shelvesBox.getChildCount()));
+        }
+        recent.refresh();
     }
 
     // ---------- Move mode: pick a card up, move it anywhere, drop it ----------
@@ -1486,7 +1507,7 @@ public class Home extends Activity {
         h.postDelayed(pipPoll, 800); // an app left floating in a mini player?
         if (stats != null) stats.start();
         if (appsDirty) rebuildApps();
-        else for (Shelf sh : shelves) sh.refresh(); // video rows follow what you just watched
+        else { for (Shelf sh : shelves) sh.refresh(); if (recent != null) recent.refresh(); } // video rows follow what you just watched
         // the greeting breathes very gently: one property animation on the render thread, no redraw cost
         if (breathe == null) {
             breathe = android.animation.ObjectAnimator.ofPropertyValuesHolder(greeting,

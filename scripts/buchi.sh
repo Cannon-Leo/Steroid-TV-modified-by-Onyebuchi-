@@ -12,6 +12,7 @@
 #   office [approve]  check Little Office end to end and send a test notice (and approval) to the TV
 #   connect [ip]      find and connect to the TV (no address needed; retries, restarts adb)
 #   adb <args>        run adb against the TV without installing anything, e.g. buchi.sh adb devices
+#   localsend         install LocalSend (send files to the TV from phone, Mac or PC; update does it once)
 #   homekeys          switch hold Home for Recent apps back on (if it stopped working)
 #   demo              record a 30 second tour of the features for posts (saved in personal/demo)
 #   update   connect + build + install + Little Office + diagnostics, in one go
@@ -52,6 +53,15 @@ homekeys() {
 
 case "$1" in
   homekeys) homekeys ;;
+  localsend)
+    # LocalSend: open source, sends files over your Wi-Fi between phone, Mac, PC and the TV (Quick Share has no TV app)
+    echo "Getting LocalSend for the TV..."
+    urls=$(curl -fsSL https://api.github.com/repos/localsend/localsend/releases/latest | grep -o '"browser_download_url": *"[^"]*\.apk"' | sed 's/.*"\(http[^"]*\)"/\1/')
+    pick=$(echo "$urls" | grep -i -E 'armeabi|arm32|armv7|v7a' | head -1)
+    [ -n "$pick" ] || pick=$(echo "$urls" | grep -v -i -E 'arm64|x86' | head -1)
+    [ -n "$pick" ] || { echo "Couldn't find LocalSend's Android download. Get the armeabi-v7a APK from localsend.org, then: scripts/buchi.sh adb install -r <file>"; exit 1; }
+    curl -fL --progress-bar -o "${TMPDIR:-/tmp}/localsend.apk" "$pick" && tv install -r "${TMPDIR:-/tmp}/localsend.apk" | tail -1 \
+      && echo "LocalSend installed: add it to My apps with the + card, open it on the TV to receive, send from LocalSend on your phone, Mac or PC" ;;
   check) scripts/check-env.sh ;;
   build) scripts/build.sh ;;
   plan)
@@ -174,7 +184,9 @@ P
     scripts/privacy-guard.sh
     echo "All done. Press Home on the TV; your photos arrive within a minute." ;;
   update)  # the whole fix in one go: build, install on the TV, refresh Little Office, then check the TV
-    scripts/connect.sh && scripts/build.sh && "$0" install && little-office/install.sh && scripts/diag.sh ;;
+    scripts/connect.sh && scripts/build.sh && "$0" install && little-office/install.sh && scripts/diag.sh && {
+      # LocalSend (file sharing like Quick Share), once, if it isn't on the TV yet
+      tv shell pm path org.localsend.localsend_app >/dev/null 2>&1 || "$0" localsend || true; } ;;
   connect) shift; scripts/connect.sh "$@" ;;
   adb) shift; tv "$@" ;;
   demo) shift; scripts/demo-video.sh "$@" ;;

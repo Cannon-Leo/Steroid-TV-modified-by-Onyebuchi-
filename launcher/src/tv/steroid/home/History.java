@@ -83,6 +83,38 @@ final class History {
         } catch (Throwable ignored) {}
     }
 
+    /** Hold OK, "Remove": one item (title), or an app's "Opened" card (title null: hides it until you use it again). */
+    static synchronized void remove(Context c, String pkg, String title) {
+        try {
+            if (title == null) {
+                c.getSharedPreferences("history", 0).edit().putLong("hide_" + pkg, System.currentTimeMillis()).apply();
+                return;
+            }
+            JSONArray old = load(c), out = new JSONArray();
+            for (int i = 0; i < old.length(); i++) {
+                JSONObject o = old.getJSONObject(i);
+                if (pkg.equals(o.optString("pkg")) && title.equals(o.optString("title"))) continue;
+                out.put(o);
+            }
+            try (FileOutputStream fo = new FileOutputStream(index(c))) { fo.write(out.toString().getBytes("UTF-8")); }
+        } catch (Throwable ignored) {}
+    }
+
+    /** Hold OK, "Clear Recently played": everything goes, and apps opened before now stay hidden. */
+    static synchronized void clear(Context c) {
+        try {
+            File[] fs = dir(c).listFiles();
+            if (fs != null) for (File f : fs) f.delete();
+            c.getSharedPreferences("history", 0).edit().putLong("cleared", System.currentTimeMillis()).apply();
+        } catch (Throwable ignored) {}
+    }
+
+    /** An app's "Opened" card stays hidden if it was removed or cleared after you last used it. */
+    static boolean hidden(Context c, String pkg, long lastUsed) {
+        android.content.SharedPreferences sp = c.getSharedPreferences("history", 0);
+        return lastUsed <= Math.max(sp.getLong("cleared", 0), sp.getLong("hide_" + pkg, 0));
+    }
+
     /** The best link back: the exact video or track when the app shares its id, otherwise the app itself. */
     static Intent link(String pkg, String id) {
         if (id != null && !id.isEmpty()) {
