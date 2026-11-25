@@ -12,6 +12,7 @@
 #   office [approve]  check Little Office end to end and send a test notice (and approval) to the TV
 #   connect [ip]      find and connect to the TV (no address needed; retries, restarts adb)
 #   adb <args>        run adb against the TV without installing anything, e.g. buchi.sh adb devices
+#   demo              record a 30 second tour of the features for posts (saved in personal/demo)
 #   update   connect + build + install + Little Office + diagnostics, in one go
 #   pip [full|close]   mini player stuck on screen? bring it back to full screen or close it
 #   undo     put everything back
@@ -150,6 +151,7 @@ P
     scripts/connect.sh && scripts/build.sh && "$0" install && little-office/install.sh && scripts/diag.sh ;;
   connect) shift; scripts/connect.sh "$@" ;;
   adb) shift; tv "$@" ;;
+  demo) scripts/demo-video.sh ;;
   pip) shift; scripts/pip.sh "$@" ;;   # mini player stuck? buchi.sh pip full / pip close
   undo) backup/restore.sh ;;
   *) sed -n 2,10p "$0" ;;
