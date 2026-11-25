@@ -12,6 +12,7 @@
 #   office [approve]  check Little Office end to end and send a test notice (and approval) to the TV
 #   connect [ip]      find and connect to the TV (no address needed; retries, restarts adb)
 #   adb <args>        run adb against the TV without installing anything, e.g. buchi.sh adb devices
+#   homekeys          switch hold Home for Recent apps back on (if it stopped working)
 #   demo              record a 30 second tour of the features for posts (saved in personal/demo)
 #   update   connect + build + install + Little Office + diagnostics, in one go
 #   pip [full|close]   mini player stuck on screen? bring it back to full screen or close it
@@ -27,7 +28,24 @@ keepfile() {  # keep every app you can open, except the ones above and anything 
     case " $drop " in *" $p "*) ;; *) echo "$p";; esac
   done > backup/keep.txt
 }
+# Hold Home for Recent apps: switch on Steroid's Home button service, keeping any others already on.
+# Must run AFTER any force-stop of tv.steroid.home: Android switches a force-stopped app's service off.
+homekeys() {
+  local S=tv.steroid.home/tv.steroid.home.HomeKeys have
+  have=$(tv shell settings get secure enabled_accessibility_services | tr -d '\r')
+  case "$have" in *"$S"*) ;; null|"") tv shell settings put secure enabled_accessibility_services "$S" ;;
+    *) tv shell settings put secure enabled_accessibility_services "$have:$S" ;; esac
+  tv shell settings put secure accessibility_enabled 1
+  mkdir -p backup
+  grep -q "enabled_accessibility_services" backup/restore.sh 2>/dev/null || \
+    echo "tv shell settings put secure enabled_accessibility_services '${have/null/}'" >> backup/restore.sh
+  sleep 1
+  tv shell settings get secure enabled_accessibility_services | tr -d '\r' | grep -q HomeKeys \
+    && echo "Hold Home for Recent apps: on" || echo "Hold Home for Recent apps: Android refused it. Switch on 'Steroid Home button' in Settings > Device Preferences > Accessibility"
+}
+
 case "$1" in
+  homekeys) homekeys ;;
   check) scripts/check-env.sh ;;
   build) scripts/build.sh ;;
   plan)
@@ -55,14 +73,8 @@ case "$1" in
     tv shell pm grant tv.steroid.home com.android.providers.tv.permission.READ_EPG_DATA 2>/dev/null && echo "Up next: allowed" || echo "Up next: permission refused (row stays hidden)"
     tv shell cmd notification allow_listener tv.steroid.home/tv.steroid.home.NotifListener && echo "Music widget: allowed"
     tv shell appops set tv.steroid.home GET_USAGE_STATS allow && echo "Recent apps: allowed"
-    # hold Home for Recent apps: switch on Steroid's Home button service, keeping any others already on
-    S=tv.steroid.home/tv.steroid.home.HomeKeys
-    have=$(tv shell settings get secure enabled_accessibility_services | tr -d '\r')
-    case "$have" in *"$S"*) ;; null|"") tv shell settings put secure enabled_accessibility_services "$S" ;;
-      *) tv shell settings put secure enabled_accessibility_services "$have:$S" ;; esac
-    tv shell settings put secure accessibility_enabled 1 && echo "Hold Home for Recent apps: on"
-    grep -q "enabled_accessibility_services" "$R" 2>/dev/null || echo "tv shell settings put secure enabled_accessibility_services '${have/null/}'" >> "$R"
     tv shell am force-stop tv.steroid.home; tv shell input keyevent KEYCODE_HOME
+    homekeys   # after the force-stop: Android switches a force-stopped app's accessibility service off
     echo "DONE: Steroid is Home" ;;
   clean) keepfile; scripts/debloat.sh backup/keep.txt ;;
   tune)
@@ -81,6 +93,7 @@ case "$1" in
     done
     # restart the launcher so the avatar, name and slideshow pick the new files up at once
     tv shell am force-stop tv.steroid.home; sleep 1; tv shell input keyevent KEYCODE_HOME
+    homekeys
     echo "Photos are in the slideshow (a profile.jpg or .png is your avatar)." ;;
   myphotos)  # your own photos and profile picture, from the folder named in personal/photos-folder (never committed)
     F="$(cat personal/photos-folder 2>/dev/null || true)"
