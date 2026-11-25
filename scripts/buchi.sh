@@ -32,6 +32,8 @@ keepfile() {  # keep every app you can open, except the ones above and anything 
 # Must run AFTER any force-stop of tv.steroid.home: Android switches a force-stopped app's service off.
 homekeys() {
   local S=tv.steroid.home/tv.steroid.home.HomeKeys have
+  # once: lets the launcher switch it back on by itself whenever Android turns it off (permanent fix)
+  tv shell pm grant tv.steroid.home android.permission.WRITE_SECURE_SETTINGS 2>/dev/null || true
   have=$(tv shell settings get secure enabled_accessibility_services | tr -d '\r')
   case "$have" in *"$S"*) ;; null|"") tv shell settings put secure enabled_accessibility_services "$S" ;;
     *) tv shell settings put secure enabled_accessibility_services "$have:$S" ;; esac

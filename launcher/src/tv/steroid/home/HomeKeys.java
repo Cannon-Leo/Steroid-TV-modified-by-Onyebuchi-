@@ -41,6 +41,28 @@ public class HomeKeys extends AccessibilityService {
         return false;
     }
 
+    /**
+     * Keeps hold Home switched on for good. Android turns an accessibility service off whenever its app
+     * is force-stopped (updates, "close all" tools, some Xiaomi clean-ups). The launcher calls this every
+     * time it comes to the front and switches the service straight back on, keeping any other services.
+     * Needs WRITE_SECURE_SETTINGS, which only adb can grant (scripts/buchi.sh install does it once).
+     */
+    static void ensure(android.content.Context c) {
+        if (c.checkSelfPermission("android.permission.WRITE_SECURE_SETTINGS") != android.content.pm.PackageManager.PERMISSION_GRANTED) return;
+        try {
+            android.content.ContentResolver r = c.getContentResolver();
+            String me = c.getPackageName() + "/" + HomeKeys.class.getName();
+            String have = android.provider.Settings.Secure.getString(r, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+            if (have != null && (":" + have + ":").contains(":" + me + ":")
+                && android.provider.Settings.Secure.getInt(r, android.provider.Settings.Secure.ACCESSIBILITY_ENABLED, 0) == 1) return;
+            String now = have == null || have.isEmpty() || have.equals("null") ? me
+                : (":" + have + ":").contains(":" + me + ":") ? have : have + ":" + me;
+            android.provider.Settings.Secure.putString(r, android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, now);
+            android.provider.Settings.Secure.putInt(r, android.provider.Settings.Secure.ACCESSIBILITY_ENABLED, 1);
+            android.util.Log.i("SteroidHome", "hold Home switched back on");
+        } catch (Exception e) { android.util.Log.w("SteroidHome", "couldn't switch hold Home on: " + e); }
+    }
+
     @Override public void onAccessibilityEvent(AccessibilityEvent event) {}
     @Override public void onInterrupt() { h.removeCallbacks(hold); }
 }

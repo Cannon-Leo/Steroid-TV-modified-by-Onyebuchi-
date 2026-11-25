@@ -1340,6 +1340,7 @@ public class Home extends Activity {
     }};
 
     @Override protected void onResume() {
+        HomeKeys.ensure(this);   // hold Home for Recent apps stays on, whatever switched it off
         BgPlayer.homeShown(this); // YouTube stopped because you came home? keep it playing
         super.onResume();
         if (Prefs.layoutVersion(this) != layoutVersion) { recreate(); return; } // arrangement changed

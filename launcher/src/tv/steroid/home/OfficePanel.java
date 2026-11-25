@@ -16,7 +16,8 @@ import java.util.List;
  * Little Office, full screen. Top: which computers are answering (Mac, Windows PC...). Then a large
  * spotlight on the agent that matters most right now (needs you, else working, else the latest),
  * with its icon, status and what it is doing. Then one card per agent (Claude, Codex, Gemini), the
- * busy ones lit up. At the bottom: what needs you, and recent activity side by side. Read only.
+ * busy ones lit up. At the bottom: what needs you, and recent activity side by side. OK on the spotlight,
+ * an agent or a row opens a side sheet: what's waiting (approve or reject there) and its notices.
  */
 public class OfficePanel extends Activity {
     final Handler h = new Handler();
@@ -99,9 +100,9 @@ public class OfficePanel extends Activity {
         st.add(new Tour.Step(() -> body.findViewWithTag("spot"), "Spotlight", "What matters right now",
             "The agent that needs you comes first, then whatever is working, then the latest finish. Amber means it needs you, green means it's working."));
         st.add(new Tour.Step(() -> body.findViewWithTag("t_agents"), "Agents", "One card per agent",
-            "How many sessions are working or waiting, or the last thing it did. A faded card means that agent isn't installed on these computers."));
+            "How many sessions are working or waiting, or the last thing it did. OK opens its notices and anything waiting for you. A faded card means that agent isn't installed on these computers."));
         st.add(new Tour.Step(() -> body.findViewWithTag("t_lists"), "Lists", "Needs you, and recent activity",
-            "Left: sessions waiting on you. Right: the last few hours, newest first. Move down with the remote to scroll."));
+            "Left: sessions waiting on you. Right: the last few hours, newest first. OK on any of them opens its request (approve or reject right there) and its notices."));
         st.add(new Tour.Step(() -> body.findViewWithTag("t_approve"), "Approvals", "Answer Claude Code from the sofa",
             "Pair once with the code shown on your computer. When Claude Code asks permission, a card appears over whatever you're watching: left and right choose, OK sends, Back leaves it for the computer. Reject is picked first, and risky commands always stay at the keyboard."));
         st.add(new Tour.Step(null, "Notices", "It finds you",
@@ -113,7 +114,269 @@ public class OfficePanel extends Activity {
         });
     }
 
-    @Override public void onBackPressed() { if (tour != null) tour.finish(); else super.onBackPressed(); }
+    @Override public void onBackPressed() {
+        if (tour != null) tour.finish();
+        else if (sheet != null) closeSheet();
+        else super.onBackPressed();
+    }
+
+    // ---------- Agent sheet: what an agent (or one project) is asking and has said ----------
+    FrameLayout sheet;
+    LinearLayout sheetList;
+    TextView sheetSub;
+    View sheetFrom;
+    String sAgent, sProject, sComputer;
+    List<Approvals.Request> waiting = new ArrayList<>();
+
+    static String agentName(String a) { return a.equals("Claude") ? "Claude Code" : a.equals("Gemini") ? "Gemini (Antigravity)" : a; }
+
+    /** OK on an agent card, the spotlight, or a row: a panel slides in from the right with that agent's
+     *  (or that project's) waiting approvals first, Approve or Reject right there, then its notices. */
+    void openSheet(String agent, String project, String computer, View from) {
+        if (sheet != null || tour != null) return;
+        sAgent = agent; sProject = project; sComputer = computer; sheetFrom = from;
+        page.setDescendantFocusability(android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS);
+        FrameLayout dim = new FrameLayout(this);
+        dim.setBackgroundColor(0x8C000000);
+        dim.setClickable(true);
+        LinearLayout p = new LinearLayout(this);
+        p.setOrientation(LinearLayout.VERTICAL);
+        p.setPadding(Ui.px(30), Ui.px(30), Ui.px(30), Ui.px(20));
+        Glass.apply(p, 0, 0xF0101014);
+        LinearLayout top = new LinearLayout(this);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        Icon ic = new Icon(this, iconFor(agent));
+        ic.setPadding(Ui.px(9), Ui.px(9), Ui.px(9), Ui.px(9));
+        GradientDrawable ig = new GradientDrawable();
+        ig.setShape(GradientDrawable.OVAL);
+        ig.setColor(Ui.withAlpha(accentFor(agent), 0xE6));
+        ic.setBackground(ig);
+        ic.color(0xFFFFFFFF);
+        top.addView(ic, new LinearLayout.LayoutParams(Ui.px(44), Ui.px(44)));
+        LinearLayout tt = new LinearLayout(this);
+        tt.setOrientation(LinearLayout.VERTICAL);
+        tt.setPadding(Ui.px(14), 0, 0, 0);
+        TextView name = Ui.text(this, Ui.serif, 26, 0xFFFFFFFF);
+        name.setText(project == null ? agentName(agent) : project);
+        name.setSingleLine(true);
+        name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        tt.addView(name);
+        sheetSub = Ui.text(this, Ui.sans, 12.5f, 0xB3FFFFFF);
+        tt.addView(sheetSub);
+        top.addView(tt, new LinearLayout.LayoutParams(0, -2, 1f));
+        p.addView(top);
+        sheetList = new LinearLayout(this);
+        sheetList.setOrientation(LinearLayout.VERTICAL);
+        sheetList.setClipChildren(false);
+        sheetList.setPadding(Ui.px(4), Ui.px(18), Ui.px(4), Ui.px(18));
+        ScrollView sv = new Rails.Page(this, Ui.px(40));
+        sv.setClipChildren(false);
+        sv.addView(sheetList);
+        p.addView(sv, new LinearLayout.LayoutParams(-1, 0, 1f));
+        TextView hint = Ui.text(this, Ui.sans, 12, 0x8CFFFFFF);
+        hint.setText("OK on a notice opens it in full  ·  Back closes");
+        p.addView(hint);
+        dim.addView(p, new FrameLayout.LayoutParams(Ui.px(560), -1, Gravity.END));
+        sheet = dim;
+        rootView.addView(dim, new FrameLayout.LayoutParams(-1, -1));
+        p.setTranslationX(Ui.px(560));
+        p.animate().translationX(0).setDuration(240).setInterpolator(new android.view.animation.DecelerateInterpolator()).start();
+        dim.setAlpha(0f);
+        dim.animate().alpha(1f).setDuration(200).start();
+        fillSheet();
+        loadWaiting();
+    }
+
+    void closeSheet() {
+        if (sheet == null) return;
+        View s = sheet;
+        sheet = null;
+        s.animate().alpha(0f).setDuration(160).withEndAction(() -> rootView.removeView(s)).start();
+        page.setDescendantFocusability(android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS);
+        View back = sheetFrom != null && sheetFrom.isAttachedToWindow() ? sheetFrom : body.findViewWithTag("spot");
+        if (back != null) back.requestFocus();
+        render();
+    }
+
+    boolean matches(String agent, String project, String computer) {
+        if (!sAgent.equals(agent)) return false;
+        if (sProject != null && !sProject.equals(project)) return false;
+        return sComputer == null || computer == null || computer.isEmpty() || sComputer.equals(computer);
+    }
+
+    /** Approvals come from Claude Code: fetched off the main thread, signed and checked (Approvals.pending). */
+    void loadWaiting() {
+        if (!sAgent.equals("Claude")) return;
+        new Thread(() -> {
+            List<Approvals.Request> all = Approvals.pending(this), mine = new ArrayList<>();
+            for (Approvals.Request q : all) if (matches("Claude", q.project, q.computer)) mine.add(q);
+            h.post(() -> { if (sheet != null) { waiting = mine; fillSheet(); } });
+        }).start();
+    }
+
+    void refreshSheet() { loadWaiting(); fillSheet(); }
+
+    void fillSheet() {
+        if (sheet == null) return;
+        View had = getCurrentFocus();
+        Object focusTag = had == null ? null : had.getTag();
+        sheetList.removeAllViews();
+        List<Notices.Item> ns = new ArrayList<>();
+        for (Notices.Item x : Notices.list(this)) if (matches(x.agent, x.project, x.computer)) ns.add(x);
+        sheetSub.setText((waiting.isEmpty() ? "" : waiting.size() + " waiting for you  ·  ")
+            + (ns.isEmpty() ? "No notices" : ns.size() + (ns.size() == 1 ? " notice" : " notices"))
+            + (sProject != null ? "  ·  " + agentName(sAgent) : ""));
+        if (!waiting.isEmpty()) {
+            sheetList.addView(Ui.label(this, "Waiting for you", 0xFFFFB454));
+            for (Approvals.Request q : waiting) sheetList.addView(approvalCard(q));
+        }
+        if (!ns.isEmpty()) {
+            TextView l = Ui.label(this, "Notices", 0x99FFFFFF);
+            if (!waiting.isEmpty()) l.setPadding(0, Ui.px(18), 0, 0);
+            sheetList.addView(l);
+            for (Notices.Item x : ns) sheetList.addView(noticeRow(x));
+        }
+        if (waiting.isEmpty() && ns.isEmpty()) {
+            TextView e = Ui.text(this, Ui.serifItalic, 20, 0xCCFFFFFF);
+            e.setText("Nothing from " + (sProject != null ? sProject : agentName(sAgent)) + " yet.");
+            e.setPadding(0, Ui.px(30), 0, Ui.px(6));
+            sheetList.addView(e);
+            TextView e2 = Ui.text(this, Ui.sans, 13, 0x99FFFFFF);
+            e2.setText(sAgent.equals("Claude") ? "Requests to approve and notices show up here as they arrive."
+                : "Notices show up here when it finishes or needs you. Approving from the TV is for Claude Code.");
+            sheetList.addView(e2);
+            View close = sheetButton("Close", 0x26FFFFFF, 0xFFFFFFFF);
+            close.setTag("sh_close");
+            close.setOnClickListener(v -> closeSheet());
+            LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(Ui.px(140), Ui.px(44));
+            cl.topMargin = Ui.px(22);
+            sheetList.addView(close, cl);
+        }
+        View back = focusTag == null ? null : sheetList.findViewWithTag(focusTag);
+        if (back == null) back = firstFocusable(sheetList);
+        if (back != null) back.requestFocus();
+    }
+
+    static View firstFocusable(android.view.ViewGroup g) {
+        for (int i = 0; i < g.getChildCount(); i++) {
+            View c = g.getChildAt(i);
+            if (c.isFocusable() && c.getVisibility() == View.VISIBLE) return c;
+            if (c instanceof android.view.ViewGroup) { View f = firstFocusable((android.view.ViewGroup) c); if (f != null) return f; }
+        }
+        return null;
+    }
+
+    TextView sheetButton(String label, int bg, int fg) {
+        TextView b = Ui.text(this, Ui.sansMedium, 15, fg);
+        b.setText(label);
+        b.setGravity(Gravity.CENTER);
+        b.setFocusable(true);
+        b.setBackground(Ui.round(bg, 14));
+        Selector.shape(b, Ui.px(14), Ui.px(3));
+        return b;
+    }
+
+    /** One request: what it wants, then Reject and Approve (Reject first: a stray OK never approves). */
+    View approvalCard(Approvals.Request q) {
+        LinearLayout c = new LinearLayout(this);
+        c.setOrientation(LinearLayout.VERTICAL);
+        c.setPadding(Ui.px(18), Ui.px(16), Ui.px(18), Ui.px(16));
+        GradientDrawable bg = Ui.round(0x26FFB454, 18);
+        bg.setStroke(Ui.px(1), 0x66FFB454);
+        c.setBackground(bg);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.topMargin = Ui.px(10);
+        c.setLayoutParams(lp);
+        c.addView(Ui.label(this, q.project + "  ·  " + q.computer, 0xCCFFFFFF));
+        TextView t = Ui.text(this, Ui.serif, 19, 0xFFFFFFFF);
+        t.setText(q.summary.isEmpty() ? "Use " + q.tool : q.summary);
+        t.setPadding(0, Ui.px(8), 0, Ui.px(6));
+        c.addView(t);
+        if (!q.detail.isEmpty() && !q.summary.endsWith(q.detail)) {
+            TextView d = Ui.text(this, Ui.mono, 12.5f, 0xCCFFFFFF);
+            d.setText(q.detail);
+            d.setMaxLines(4);
+            d.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            d.setPadding(Ui.px(12), Ui.px(8), Ui.px(12), Ui.px(8));
+            d.setBackground(Ui.round(0x1AFFFFFF, 10));
+            c.addView(d);
+        }
+        LinearLayout btns = new LinearLayout(this);
+        btns.setPadding(0, Ui.px(14), 0, 0);
+        TextView no = sheetButton("Reject", 0x33FF6B5A, 0xFFFFFFFF), yes = sheetButton("Approve", 0x336FD49B, 0xFFFFFFFF);
+        no.setTag("no_" + q.id);
+        yes.setTag("yes_" + q.id);
+        no.setOnFocusChangeListener((v, f) -> { ((GradientDrawable) no.getBackground()).setColor(f ? 0xFFFF6B5A : 0x33FF6B5A); no.setTextColor(f ? 0xFF140A08 : 0xFFFFFFFF); });
+        yes.setOnFocusChangeListener((v, f) -> { ((GradientDrawable) yes.getBackground()).setColor(f ? 0xFF6FD49B : 0x336FD49B); yes.setTextColor(f ? 0xFF08140C : 0xFFFFFFFF); });
+        TextView state = Ui.text(this, Ui.sans, 12.5f, 0xB3FFFFFF);
+        View.OnClickListener send = v -> {
+            boolean allow = v == yes;
+            no.setEnabled(false); yes.setEnabled(false);
+            state.setText(allow ? "Approving…" : "Rejecting…");
+            new Thread(() -> {
+                boolean ok = Approvals.decide(this, q, allow);
+                h.post(() -> {
+                    if (sheet == null) return;
+                    if (ok) { waiting.remove(q); state.setText(allow ? "Approved" : "Rejected"); h.postDelayed(this::fillSheet, 700); }
+                    else { state.setText("Couldn't reach " + q.computer + ". Answer it there."); no.setEnabled(true); yes.setEnabled(true); }
+                });
+            }).start();
+        };
+        no.setOnClickListener(send);
+        yes.setOnClickListener(send);
+        btns.addView(no, new LinearLayout.LayoutParams(0, Ui.px(46), 1));
+        LinearLayout.LayoutParams yl = new LinearLayout.LayoutParams(0, Ui.px(46), 1);
+        yl.leftMargin = Ui.px(12);
+        btns.addView(yes, yl);
+        c.addView(btns);
+        state.setPadding(0, Ui.px(8), 0, 0);
+        c.addView(state);
+        return c;
+    }
+
+    /** One notice: what happened, where, when. OK opens it in full (and marks it read). */
+    View noticeRow(Notices.Item x) {
+        LinearLayout r = new LinearLayout(this);
+        r.setOrientation(LinearLayout.VERTICAL);
+        r.setFocusable(true);
+        r.setTag("n_" + x.id + x.project);
+        r.setPadding(Ui.px(16), Ui.px(13), Ui.px(16), Ui.px(13));
+        GradientDrawable bg = Ui.round(x.read ? 0x14FFFFFF : 0x24FFFFFF, 16);
+        r.setBackground(bg);
+        Selector.shape(r, Ui.px(16), Ui.px(3));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.topMargin = Ui.px(10);
+        r.setLayoutParams(lp);
+        LinearLayout top = new LinearLayout(this);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        boolean needs = "needs_you".equals(x.kind) || "needs".equals(x.kind);
+        View dot = new View(this);
+        dot.setBackground(Ui.round(x.read ? 0x40FFFFFF : needs ? 0xFFFFB454 : 0xFF6FD49B, 4));
+        top.addView(dot, new LinearLayout.LayoutParams(Ui.px(8), Ui.px(8)));
+        TextView k = Ui.text(this, Ui.sansMedium, 13.5f, 0xFFFFFFFF);
+        k.setText((needs ? "Needs you" : "Finished") + "  ·  " + x.project);
+        k.setSingleLine(true);
+        k.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        k.setPadding(Ui.px(10), 0, Ui.px(8), 0);
+        top.addView(k, new LinearLayout.LayoutParams(0, -2, 1f));
+        long m = (System.currentTimeMillis() - x.at) / 60000;
+        top.addView(Ui.text(this, Ui.sans, 11.5f, 0x8CFFFFFF));
+        ((TextView) top.getChildAt(2)).setText(m < 1 ? "now" : m < 60 ? m + " min" : m < 1440 ? (m / 60) + " h" : (m / 1440) + " d");
+        r.addView(top);
+        TextView t = Ui.text(this, Ui.sans, 13, 0xCCFFFFFF);
+        t.setText(x.text.isEmpty() ? (x.computer.isEmpty() ? "" : x.computer) : x.text + (x.computer.isEmpty() ? "" : "  ·  " + x.computer));
+        t.setMaxLines(2);
+        t.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        t.setPadding(Ui.px(18), Ui.px(5), 0, 0);
+        r.addView(t);
+        r.setOnClickListener(v -> {
+            boolean open = t.getMaxLines() > 2;
+            t.setMaxLines(open ? 2 : 40);
+            t.setEllipsize(open ? android.text.TextUtils.TruncateAt.END : null);
+            if (!x.read) { x.read = true; Notices.save(this); bg.setColor(0x14FFFFFF); dot.setBackground(Ui.round(0x40FFFFFF, 4)); }
+        });
+        return r;
+    }
 
     static int iconFor(String agent) {
         switch (agent) { case "Claude": return Icon.CLAUDE; case "Codex": return Icon.CODEX; default: return Icon.GEMINI; }
@@ -190,6 +453,7 @@ public class OfficePanel extends Activity {
         ap.setTag("t_approve");
         body.addView(ap, alp);
 
+        if (sheet != null) { refreshSheet(); return; }   // the sheet keeps focus; it refreshes itself
         View back = focusKey == null ? null : body.findViewWithTag(focusKey);
         if (back != null) back.requestFocus();
         else { View s = body.findViewWithTag("spot"); if (s != null) s.requestFocus(); }
@@ -240,6 +504,7 @@ public class OfficePanel extends Activity {
         card.setPadding(Ui.px(28), Ui.px(26), Ui.px(28), Ui.px(26));
         Glass g = Glass.apply(card, 24, Ui.withAlpha(Ambient.blend(sc, 0xFF0E0E12, 0.82f), 0xB3));
         Selector.shape(card, Ui.px(24), Ui.px(9)); // big card: no zoom, a roomier ring that clears its edges
+        card.setOnClickListener(v -> openSheet(agent, s == null ? null : s.project, s == null ? null : s.computer, v));
 
         FrameLayout badge = new FrameLayout(this);
         badge.setClipChildren(false);
@@ -322,6 +587,7 @@ public class OfficePanel extends Activity {
         Glass.apply(c, 20, busy ? Ui.withAlpha(Ambient.blend(sc, 0xFF0E0E12, 0.75f), 0xCC) : 0x8C101014);
         c.setAlpha(here ? 1f : 0.5f);
         c.setOnFocusChangeListener((v, f) -> Ui.lift(v, f, 1.03f));
+        c.setOnClickListener(v -> openSheet(agent, null, null, v));   // its notices and anything waiting
         Selector.shape(c, Ui.px(20), Ui.px(8));
         LinearLayout top = new LinearLayout(this);
         top.setGravity(Gravity.CENTER_VERTICAL);
@@ -470,6 +736,8 @@ public class OfficePanel extends Activity {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
         lp.bottomMargin = Ui.px(10);
         r.setLayoutParams(lp);
+        Selector.shape(r, Ui.px(16), Ui.px(3));
+        r.setOnClickListener(v -> openSheet(s.agent, s.project, s.computer, v));   // that project's request or notices
         Icon i = new Icon(this, iconFor(s.agent));
         i.setPadding(Ui.px(7), Ui.px(7), Ui.px(7), Ui.px(7));
         GradientDrawable ig = new GradientDrawable();
