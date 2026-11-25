@@ -17,9 +17,9 @@ act() { tv shell am start -n "$H/.$1" >/dev/null 2>&1; }
 echo "Getting ready..."
 k KEYCODE_HOME; sleep 2
 tv shell rm -f /sdcard/steroid-demo.mp4
-echo "Recording 32 seconds. Hands off the remote."
+echo "Recording the tour (about a minute). Hands off the remote."
 SIZE=""; [ "$1" = 720 ] && SIZE="--size 1280x720"
-tv shell screenrecord --time-limit 32 $SIZE --bit-rate 12000000 /sdcard/steroid-demo.mp4 &
+tv shell screenrecord --time-limit 90 $SIZE --bit-rate 12000000 /sdcard/steroid-demo.mp4 &
 REC=$!
 sleep 2.5                                   # home, top
 for i in 1 2 3; do k KEYCODE_DPAD_DOWN; sleep 1.3; done   # rails scroll by
@@ -37,6 +37,8 @@ act Radio; sleep 3                          # Radio
 k KEYCODE_HOME; sleep 0.8
 # photo screensaver: Android's own "start screensaver" screen, or ask the dream service directly
 tv shell am start -n com.android.systemui/.Somnambulator >/dev/null 2>&1 || tv shell service call dreams 1 >/dev/null 2>&1
+sleep 4
+tv shell pkill -INT screenrecord >/dev/null 2>&1   # tour done: stop recording (adb is slower than the plan, so it runs long)
 wait $REC
 k KEYCODE_HOME
 echo "Saving the recording..."
@@ -53,13 +55,15 @@ fi
 tv shell rm -f /sdcard/steroid-demo.mp4
 command -v ffmpeg >/dev/null || { echo "Saved $OUT/raw.mp4 (install ffmpeg for the polished versions)"; [ "$(uname)" = Darwin ] && /usr/bin/open "$OUT"; exit 0; }
 echo "Polishing..."
-# 30 seconds, smooth 30 fps, gentle fade in and out, plays everywhere (H.264, faststart)
-F="fps=30,fade=t=in:st=0:d=0.4,fade=t=out:st=29.4:d=0.6"
-ffmpeg -y -loglevel error -ss 0.3 -t 30 -i "$OUT/raw.mp4" -vf "scale=1920:1080:flags=lanczos,$F" \
+# squeezed to 30 seconds whatever the recording's length, smooth 30 fps, gentle fades, plays everywhere
+DUR=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$OUT/raw.mp4")
+SP=$(awk -v d="$DUR" 'BEGIN{s=(d-0.3)/30; if(s<1)s=1; printf "%.3f", s}')
+F="setpts=(PTS-STARTPTS)/$SP,fps=30,fade=t=in:st=0:d=0.4,fade=t=out:st=29.4:d=0.6"
+ffmpeg -y -loglevel error -ss 0.3 -i "$OUT/raw.mp4" -t 30 -vf "scale=1920:1080:flags=lanczos,$F" \
   -c:v libx264 -preset veryfast -crf 19 -pix_fmt yuv420p -movflags +faststart -an "$OUT/steroid-demo.mp4"
 # square for feeds: the TV picture centred on a soft blurred copy of itself
-ffmpeg -y -loglevel error -ss 0.3 -t 30 -i "$OUT/raw.mp4" -filter_complex \
-  "[0:v]scale=1080:1080:force_original_aspect_ratio=increase,crop=1080:1080,boxblur=30:3,eq=brightness=-0.08[bg];[0:v]scale=1080:-2:flags=lanczos[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,$F" \
+ffmpeg -y -loglevel error -ss 0.3 -i "$OUT/raw.mp4" -t 30 -filter_complex \
+  "[0:v]split[x][y];[x]scale=1080:1080:force_original_aspect_ratio=increase,crop=1080:1080,boxblur=30:3,eq=brightness=-0.08[bg];[y]scale=1080:-2:flags=lanczos[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,$F" \
   -c:v libx264 -preset veryfast -crf 20 -pix_fmt yuv420p -movflags +faststart -an "$OUT/steroid-demo-square.mp4"
 [ -s "$OUT/steroid-demo.mp4" ] || { echo "Polishing failed; the plain recording is $OUT/raw.mp4"; /usr/bin/open "$OUT" 2>/dev/null; exit 1; }
 echo "DONE"
