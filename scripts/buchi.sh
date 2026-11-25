@@ -12,7 +12,7 @@
 #   office [approve]  check Little Office end to end and send a test notice (and approval) to the TV
 #   connect [ip]      find and connect to the TV (no address needed; retries, restarts adb)
 #   adb <args>        run adb against the TV without installing anything, e.g. buchi.sh adb devices
-#   localsend         install LocalSend (send files to the TV from phone, Mac or PC; update does it once)
+#   localsend [apk]   install LocalSend (send files to the TV from phone, Mac or PC; update does it once)
 #   homekeys          switch hold Home for Recent apps back on (if it stopped working)
 #   demo              record a 30 second tour of the features for posts (saved in personal/demo)
 #   update   connect + build + install + Little Office + diagnostics, in one go
@@ -55,6 +55,18 @@ case "$1" in
   homekeys) homekeys ;;
   localsend)
     # LocalSend: open source, sends files over your Wi-Fi between phone, Mac, PC and the TV (Quick Share has no TV app)
+    # a file you downloaded yourself works too: scripts/buchi.sh localsend ~/Downloads/LocalSend-...apk
+    # (or put it in personal/apps/, which never goes to GitHub). It must match the TV's processor.
+    f="${2:-$(ls "$ROOT"/personal/apps/LocalSend*.apk 2>/dev/null | head -1)}"
+    if [ -n "$f" ]; then
+      abi=$(tv shell getprop ro.product.cpu.abilist | tr -d '\r')
+      libs=$(unzip -l "$f" 2>/dev/null | grep -o 'lib/[^/]*/' | sort -u | sed 's#lib/##; s#/##' | tr '\n' ' ')
+      ok=""; for l in $libs; do case ",$abi," in *",$l,"*) ok=1 ;; esac; done
+      if [ -n "$libs" ] && [ -z "$ok" ]; then
+        echo "That LocalSend file is built for: $libs. This TV runs: $abi. Get the armeabi-v7a / arm32v7 file instead."; exit 1
+      fi
+      tv install -r "$f" | tail -1 && echo "LocalSend installed from $(basename "$f")"; exit 0
+    fi
     echo "Getting LocalSend for the TV..."
     urls=$(curl -fsSL https://api.github.com/repos/localsend/localsend/releases/latest | grep -o '"browser_download_url": *"[^"]*\.apk"' | sed 's/.*"\(http[^"]*\)"/\1/')
     pick=$(echo "$urls" | grep -i -E 'armeabi|arm32|armv7|v7a' | head -1)
