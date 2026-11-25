@@ -14,30 +14,51 @@ import android.view.accessibility.AccessibilityEvent;
  * Every other key goes straight through untouched. Switched on by scripts/buchi.sh install.
  */
 public class HomeKeys extends AccessibilityService {
-    static final long HOLD = 450;   // ms: longer than a normal press, shorter than impatience
+    static final long HOLD = 450;   // ms from the first press: a hold
+    static final long GAP = 260;    // ms of silence after a release: the press is over
     final Handler h = new Handler(Looper.getMainLooper());
-    boolean held;
+    // Xiaomi's remote doesn't keep the O button "down" while you hold it: it sends press, release,
+    // press, release... for as long as it's held (seen with getevent: KEY_HOMEPAGE DOWN/UP pairs).
+    // So a hold is either a press still down after HOLD, or presses that keep coming for HOLD.
+    boolean busy, down, fired;
+    int presses;
 
-    final Runnable hold = () -> {
-        held = true;
-        // never any heavy work here: the system waits on this service for every Home press
-        try { Recents.captureHome(); } catch (Throwable ignored) {}   // async, returns at once
-        try {
-            startActivity(new Intent(this, Recents.class)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_ANIMATION));
-        } catch (Exception e) { held = false; }   // couldn't open: the release still goes Home
+    final Runnable decide = () -> {
+        if (!busy || fired) return;
+        if (down || presses >= 2) {   // still held, or the remote is repeating it: a hold
+            fired = true;
+            try { Recents.captureHome(); } catch (Throwable ignored) {}   // async, returns at once
+            try {
+                startActivity(new Intent(this, Recents.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_ANIMATION));
+                android.util.Log.i("SteroidHome", "hold Home: Recent apps");
+            } catch (Exception e) { fired = false; }
+        }
+    };
+
+    final Runnable over = () -> {   // the button has been quiet for GAP after a release
+        h.removeCallbacks(decide);
+        if (busy && !fired) performGlobalAction(GLOBAL_ACTION_HOME);   // a normal press: Home, as always
+        busy = false; down = false; fired = false; presses = 0;
     };
 
     @Override protected boolean onKeyEvent(KeyEvent e) {
         if (e.getKeyCode() != KeyEvent.KEYCODE_HOME) return false;   // never touch any other key
+        // nothing slow here: Android waits on this for every Home press
         if (e.getAction() == KeyEvent.ACTION_DOWN) {
-            if (e.getRepeatCount() == 0) { held = false; h.removeCallbacks(hold); h.postDelayed(hold, HOLD); }
+            h.removeCallbacks(over);
+            if (e.getRepeatCount() == 0) {
+                if (!busy) { busy = true; fired = false; presses = 0; h.postDelayed(decide, HOLD); }
+                presses++;
+            }
+            down = true;
             return true;
         }
         if (e.getAction() == KeyEvent.ACTION_UP) {
-            h.removeCallbacks(hold);
-            if (!held) performGlobalAction(GLOBAL_ACTION_HOME);   // a normal press: Home, as always
-            held = false;
+            down = false;
+            if (!busy) { performGlobalAction(GLOBAL_ACTION_HOME); return true; }   // stray release
+            h.removeCallbacks(over);
+            h.postDelayed(over, GAP);
             return true;
         }
         return false;
@@ -45,8 +66,8 @@ public class HomeKeys extends AccessibilityService {
 
     /**
      * Keeps hold Home switched on for good. Android turns an accessibility service off whenever its app
-     * is force-stopped (updates, "close all" tools, some Xiaomi clean-ups). The launcher calls this every
-     * time it comes to the front and switches the service straight back on, keeping any other services.
+     * is force-stopped, and never restarts one it marked "crashed". The launcher calls this every time it
+     * comes to the front and starts the service again if it isn't really running, keeping any others.
      * Needs WRITE_SECURE_SETTINGS, which only adb can grant (scripts/buchi.sh install does it once).
      */
     static long lastFix = -60000;
@@ -101,5 +122,5 @@ public class HomeKeys extends AccessibilityService {
     @Override protected void onServiceConnected() { android.util.Log.i("SteroidHome", "hold Home service running"); }
 
     @Override public void onAccessibilityEvent(AccessibilityEvent event) {}
-    @Override public void onInterrupt() { h.removeCallbacks(hold); }
+    @Override public void onInterrupt() { h.removeCallbacks(decide); h.removeCallbacks(over); busy = false; }
 }
