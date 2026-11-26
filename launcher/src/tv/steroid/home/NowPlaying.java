@@ -137,6 +137,10 @@ class NowPlaying extends FrameLayout {
     /** Send a media key straight to the app, like a remote's play/next buttons. */
     boolean key(int code) {
         if (ctl == null) return false;
+        if (code == KeyEvent.KEYCODE_MEDIA_NEXT || code == KeyEvent.KEYCODE_MEDIA_PREVIOUS) {
+            // some apps announce the new song late or only once: look again a few times in the next seconds
+            for (long d : new long[]{150, 400, 800, 1400, 2200, 3200}) h.postDelayed(this::show, d);
+        }
         long t = SystemClock.uptimeMillis();
         boolean ok = ctl.dispatchMediaButtonEvent(new KeyEvent(t, t, KeyEvent.ACTION_DOWN, code, 0));
         ctl.dispatchMediaButtonEvent(new KeyEvent(t, t, KeyEvent.ACTION_UP, code, 0));
@@ -201,6 +205,28 @@ class NowPlaying extends FrameLayout {
 
     static String sessionKey(MediaController m) { return m.getPackageName() + "|" + m.getSessionToken().hashCode(); }
 
+    // ---------- no ghost after a restart ----------
+    // After a restart or power cut, Spotify (and others) bring back their last track, paused. That
+    // isn't something you're playing, so the widget only shows a paused app if it actually played
+    // since this boot (Android's boot counter, so a wrong clock at power on can't fool it).
+
+    static int boot(Context c) {
+        try { return android.provider.Settings.Global.getInt(c.getContentResolver(), android.provider.Settings.Global.BOOT_COUNT); }
+        catch (Exception e) { return -1; }
+    }
+
+    /** Noted by the widget and by the always running listener whenever an app is playing. */
+    static void markPlayed(Context c, String pkg) {
+        android.content.SharedPreferences sp = c.getSharedPreferences("nowplaying", 0);
+        int b = boot(c);
+        if (sp.getInt("p_" + pkg, -2) != b) sp.edit().putInt("p_" + pkg, b).apply();
+    }
+
+    static boolean playedSinceBoot(Context c, String pkg) {
+        int b = boot(c);
+        return b >= 0 && c.getSharedPreferences("nowplaying", 0).getInt("p_" + pkg, -2) == b;
+    }
+
     // ---------- following the apps ----------
 
     /** Start following media sessions. Safe to call when the permission was never granted. */
@@ -235,6 +261,8 @@ class NowPlaying extends FrameLayout {
             PlaybackState s = m.getPlaybackState();
             if (s == null) continue;
             boolean playing = s.getState() == PlaybackState.STATE_PLAYING;
+            if (playing) markPlayed(getContext(), m.getPackageName());
+            else if (!playedSinceBoot(getContext(), m.getPackageName())) continue;   // brought back paused at power on: not playing
             if (playing && sessionKey(m).equals(dismissedKey)) dismissedKey = null; // you pressed play again
             if (playing) Clear.dismissed.remove(sessionKey(m));
             else if (Clear.dismissed.contains(sessionKey(m))) continue;           // closed with Close all
@@ -251,7 +279,9 @@ class NowPlaying extends FrameLayout {
         PlaybackState s = ctl == null ? null : ctl.getPlaybackState();
         int st = s == null ? PlaybackState.STATE_NONE : s.getState();
         if (ctl != null && st == PlaybackState.STATE_PLAYING && sessionKey(ctl).equals(dismissedKey)) dismissedKey = null;
+        if (ctl != null && (st == PlaybackState.STATE_PLAYING || st == PlaybackState.STATE_BUFFERING)) markPlayed(getContext(), ctl.getPackageName());
         boolean alive = ctl != null && st != PlaybackState.STATE_NONE && st != PlaybackState.STATE_ERROR
+            && (st == PlaybackState.STATE_PLAYING || st == PlaybackState.STATE_BUFFERING || playedSinceBoot(getContext(), ctl.getPackageName()))
             && st != PlaybackState.STATE_STOPPED
             && !sessionKey(ctl).equals(dismissedKey) && (st == PlaybackState.STATE_PLAYING || !Clear.dismissed.contains(sessionKey(ctl)));
         setActive(alive);
@@ -297,6 +327,14 @@ class NowPlaying extends FrameLayout {
     /** Twice a second while showing: keeps the progress bar moving and catches apps that report late. */
     final Runnable tick = new Runnable() { public void run() {
         if (active && isShown()) {
+            if (ctl != null) {   // a new song the app didn't announce: show its name and art anyway
+                MediaMetadata md = ctl.getMetadata();
+                String ti = md == null ? null : md.getString(MediaMetadata.METADATA_KEY_TITLE);
+                Bitmap b = md == null ? null : md.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART);
+                if (b == null && md != null) b = md.getBitmap(MediaMetadata.METADATA_KEY_ART);
+                if (b == null && md != null) b = md.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON);
+                if (!(ti == null ? "Playing" : ti).contentEquals(title.getText()) || b != shownArt) show();
+            }
             if (SystemClock.uptimeMillis() > optimisticUntil && ctl != null) {
                 PlaybackState s = ctl.getPlaybackState();
                 boolean p = s != null && (s.getState() == PlaybackState.STATE_PLAYING || s.getState() == PlaybackState.STATE_BUFFERING);

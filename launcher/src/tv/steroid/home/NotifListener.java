@@ -43,6 +43,8 @@ public class NotifListener extends NotificationListenerService {
         for (MediaController m : list) {
             m.registerCallback(cb(m), h);
             watched.add(m);
+            PlaybackState ps = m.getPlaybackState();
+            if (ps != null && ps.getState() == PlaybackState.STATE_PLAYING) NowPlaying.markPlayed(this, m.getPackageName());
             if (!BgPlayer.TAG.equals(m.getTag())) History.record(this, m);
         }
         // a YouTube session that was playing has gone away: same as it stopping
@@ -90,6 +92,7 @@ public class NotifListener extends NotificationListenerService {
                     trackYt(m, s);
                     // anything else starting to play: our background player steps aside
                     if (st == PlaybackState.STATE_PLAYING && !BgPlayer.TAG.equals(m.getTag())) BgPlayer.otherPlaying();
+                    if (st == PlaybackState.STATE_PLAYING) NowPlaying.markPlayed(NotifListener.this, m.getPackageName());   // played since this boot
                     if (BgPlayer.TAG.equals(m.getTag())) { lastState = st; return; }
                     if (st == PlaybackState.STATE_PLAYING && lastState != PlaybackState.STATE_PLAYING) History.record(NotifListener.this, m);
                     lastState = st;
