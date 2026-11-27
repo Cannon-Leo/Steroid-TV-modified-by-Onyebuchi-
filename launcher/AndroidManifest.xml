@@ -65,6 +65,9 @@
             <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
             <meta-data android:name="android.accessibilityservice" android:resource="@xml/home_keys" />
         </service>
+        <!-- the screensaver clock styles, previewed full screen -->
+        <activity android:name=".ClockStyles" android:exported="false" android:screenOrientation="landscape"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen" />
         <activity android:name=".Personal" android:exported="false" android:screenOrientation="landscape"
             android:windowSoftInputMode="adjustPan" />
         <service android:name=".NotifListener" android:exported="true"

@@ -120,6 +120,18 @@ public class Personal extends Activity {
             iv.setText(next + " s");
         });
 
+        // ---- Screensaver clock
+        LinearLayout ss = group("Screensaver clock");
+        LinearLayout styleRow = row(ss, Icon.TIMER, "Clock style", ClockFace.HINTS[Math.max(0, Math.min(ClockFace.NAMES.length - 1, Prefs.sp(this).getInt("ss_style", 0)))]);
+        TextView sb = pillButton(styleRow, ClockFace.NAMES[Math.max(0, Math.min(ClockFace.NAMES.length - 1, Prefs.sp(this).getInt("ss_style", 0)))] + "  ›");
+        sb.setTag("ss_style_btn");
+        sb.setOnClickListener(v -> { refocus = "ss_style_btn"; startActivity(new android.content.Intent(this, ClockStyles.class)); });
+        switchRow(ss, Icon.GRID, "Date", "Day and date with the clock", "ss_date");
+        switchRow(ss, Icon.CLOUD_SUN, "Weather", "Animated weather icon and temperature", "ss_weather");
+        switchRow(ss, Icon.TIMER, "AM / PM", "Small AM or PM beside the time", "ss_ampm");
+        switchRow(ss, Icon.TIMER, "Seconds", "Running seconds beside the time", "ss_secs");
+        switchRow(ss, Icon.CLOUD, "Today's forecast", "Today's weather with the high and low", "ss_range");
+
         // ---- Arrange home screen
         LinearLayout arrange = group("Home screen");
         arrangeCard = arrange;
@@ -296,6 +308,13 @@ public class Personal extends Activity {
     @Override public boolean onKeyDown(int k, KeyEvent e) {
         if (k == KeyEvent.KEYCODE_BACK && nameField != null) Prefs.name(this, nameField.getText().toString());
         return super.onKeyDown(k, e);
+    }
+
+    boolean picked;
+    @Override protected void onResume() {
+        super.onResume();
+        if (picked) build();   // back from the clock picker: show the style you chose
+        picked = true;
     }
 
     @Override protected void onPause() {
