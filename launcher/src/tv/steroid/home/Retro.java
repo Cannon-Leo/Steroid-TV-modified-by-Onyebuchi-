@@ -248,21 +248,6 @@ public class Retro extends Activity {
     void js(String code) { web.evaluateJavascript(code, null); }
     void tvJs(String code) { tv.evaluateJavascript(code, null); }
 
-    /** Real key input: the browser only allows full screen from a user gesture. */
-    void nativeKey(int code) {
-        web.requestFocus();
-        web.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, code));
-        web.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, code));
-    }
-
-    /** Keyboard focus left inside YouTube's frame keeps its title bar and pause button showing. */
-    void unfocus() {
-        js("if(document.activeElement)document.activeElement.blur();window.focus();");
-        web.clearFocus();
-        if (full != null) full.clearFocus();
-        root.requestFocus();
-    }
-
     void dropFull() {
         if (full == null) return;
         root.removeView(full);
@@ -589,7 +574,6 @@ public class Retro extends Activity {
             else if (on) animate().alpha(0f).setDuration(350).withEndAction(() -> { on = false; setVisibility(GONE); }).start();
         }
 
-        void flicker() { if (!on) { setAlpha(0.35f); setVisibility(VISIBLE); on = true; postDelayed(() -> on(false), 180); } }
 
         @Override protected void onDraw(Canvas c) {
             int ox = r.nextInt(96), oy = r.nextInt(54);

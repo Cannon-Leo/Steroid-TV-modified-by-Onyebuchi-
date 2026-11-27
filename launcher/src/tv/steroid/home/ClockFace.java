@@ -24,15 +24,22 @@ import java.util.Locale;
  * Contrast follows the photo (lum): the brighter the picture, the firmer the shadow.
  */
 class ClockFace {
-    static final String[] NAMES = {"Classic", "Tall", "Outline", "Glass", "Gradient", "Stacked", "Minimal"};
+    static final String[] NAMES = {"Classic", "Tall", "Outline", "Glass", "Gradient", "Stacked", "Minimal",
+        "Ring", "Split", "Mono", "Serif", "Block", "Corner"};
     static final String[] HINTS = {
         "Date and weather on top, a large centred time, AM/PM over the seconds",
-        "Very tall narrow hours, faded minutes beside them, date at the bottom left",
+        "Very tall narrow hours, faded minutes, a tidy column with date, weather and seconds",
         "Narrow hours in solid white, minutes as an outline",
         "Solid hours, see through minutes, like frosted glass",
         "Narrow digits filled with a cool sky gradient",
         "Hours over minutes on the left, date and weather beside them",
         "A small, light clock in the bottom left corner",
+        "The time inside a thin ring that fills with the seconds",
+        "Hours on the far left, minutes on the far right, the date between them",
+        "A typewriter clock with a blinking colon, top left",
+        "An elegant italic serif time, centred, with a spaced out date",
+        "Heavy, tightly packed digits low on the screen",
+        "A compact clock top right, everything aligned to the right",
     };
 
     final Context ctx;
@@ -177,6 +184,12 @@ class ClockFace {
             case 2: case 3: case 4: narrow(c, k, w, h, front, lum, sx, sy); break;
             case 5: stacked(c, k, w, h, front, lum, sx, sy); break;
             case 6: minimal(c, k, w, h, front, lum, sx, sy); break;
+            case 7: ring(c, k, w, h, front, lum, sx, sy); break;
+            case 8: split(c, k, w, h, front, lum, sx, sy); break;
+            case 9: mono(c, k, w, h, front, lum, sx, sy); break;
+            case 10: serif(c, k, w, h, front, lum, sx, sy); break;
+            case 11: block(c, k, w, h, front, lum, sx, sy); break;
+            case 12: corner(c, k, w, h, front, lum, sx, sy); break;
             default: classic(c, k, w, h, front, lum, sx, sy);
         }
     }
@@ -206,41 +219,46 @@ class ClockFace {
         }
     }
 
-    /** Tall: very tall narrow hours, the minutes faded beside them, date at the bottom left. */
+    /** Tall: very tall narrow hours, the minutes faded beside them, a tidy column of details on the right. */
     void tall(Canvas c, Calendar k, int w, int h, boolean front, float lum, int sx, int sy) {
         String hh = DateFormat.format("hh", k).toString(), mm = DateFormat.format("mm", k).toString();
         big.setTypeface(bold);
-        big.setTextSize(h * 0.86f);
-        big.setTextScaleX(0.40f);
-        float cl = cell(big), track = cl * 0.04f, cap = big.getTextSize() * 0.70f;
-        float x0 = w * 0.06f + sx, baseline = h * 0.5f + cap / 2 + sy;
-        float hw = width(hh, big, cl, track), gap = cl * 0.18f;
+        big.setTextSize(h * 0.80f);
+        big.setTextScaleX(0.42f);
+        float cl = cell(big), track = cl * 0.02f, cap = big.getTextSize() * 0.70f;
+        float hw = width(hh, big, cl, track), mw = width(mm, big, cl, track), gap = cl * 0.10f;
+        float colW = Ui.px(200), x0 = (w - (hw + gap + mw + Ui.px(36) + colW)) / 2f + sx;   // digits and column, centred together
+        float capTop = (h - cap) / 2f + sy, baseline = capTop + cap;
         if (!front) {
             shade(big, 18, lum);
-            big.setColor(0xF2FFFFFF);
+            big.setColor(0xF5FFFFFF);
             digits(c, hh, x0, baseline, big, cl, track);
-            big.setColor(0x66FFFFFF);
+            big.setColor(0x6BFFFFFF);
             digits(c, mm, x0 + hw + gap, baseline, big, cl, track);
             return;
         }
-        float mEnd = x0 + hw + gap + width(mm, big, cl, track);
-        sideStack(c, k, mEnd + Ui.px(14), baseline - cap, baseline, Ui.px(24), lum);
-        float y = baseline + Ui.px(40);
-        if (y > h - Ui.px(30)) y = h - Ui.px(30);
-        if (showDate) {
-            small.setTextSize(Ui.px(20));
-            small.setColor(0xF2FFFFFF);
-            shade(small, 6, lum);
-            c.drawText(DateFormat.format("d/M", k).toString(), x0 + Ui.px(6), baseline - cap * 0.30f, small);
-            c.drawText(DateFormat.format("EEEE", k).toString(), x0 + Ui.px(6), baseline - cap * 0.30f + Ui.px(26), small);
+        float cx = x0 + hw + gap + mw + Ui.px(36);
+        small.setColor(0xF2FFFFFF);
+        shade(small, 6, lum);
+        if (showDate) {   // weekday and date at the top of the column, level with the top of the digits
+            small.setTextSize(Ui.px(28));
+            c.drawText(DateFormat.format("EEEE", k).toString(), cx, capTop + Ui.px(24), small);
+            small.setTextSize(Ui.px(18));
+            small.setColor(0xCCFFFFFF);
+            c.drawText(DateFormat.format("d MMMM", k).toString(), cx, capTop + Ui.px(52), small);
         }
-        if (showWeather) {
-            float wy = baseline - cap * 0.30f + (showDate ? Ui.px(58) : 0);
-            boolean wasDate = showDate;
+        if (showWeather && !weatherText().isEmpty()) {
+            boolean d = showDate;
             showDate = false;
-            infoLine(c, "", x0 + Ui.px(6), wy, 18, lum, false);
-            showDate = wasDate;
+            infoLine(c, "", cx, capTop + Ui.px(showDate || d ? 92 : 24), 18, lum, false);
+            showDate = d;
+            if (showRange && !rangeText().isEmpty()) {
+                small.setTextSize(Ui.px(13));
+                small.setColor(0xB3FFFFFF);
+                c.drawText(rangeText(), cx, capTop + Ui.px(d ? 118 : 50), small);
+            }
         }
+        sideStack(c, k, cx, baseline - Ui.px(56), baseline, Ui.px(26), lum);   // AM/PM and seconds on the baseline
     }
 
     /** Outline, Glass, Gradient: narrow digits across the top, date and weather beneath. */
@@ -345,6 +363,197 @@ class ClockFace {
             small.setTextSize(Ui.px(14));
             small.setColor(0xB3FFFFFF);
             c.drawText("·  " + rangeText(), end + Ui.px(16), info, small);
+        }
+    }
+
+    /** Ring: the time inside a thin ring that fills with the seconds, right of centre. */
+    void ring(Canvas c, Calendar k, int w, int h, boolean front, float lum, int sx, int sy) {
+        float r = h * 0.27f, cx = w * 0.68f + sx, cy = h * 0.44f + sy;
+        String time = DateFormat.format("h:mm", k).toString();
+        big.setTypeface(bold);
+        big.setTextSize(r * 0.62f);
+        float cl = cell(big), track = -big.getTextSize() * 0.02f, cap = big.getTextSize() * 0.70f;
+        float tw = width(time, big, cl, track);
+        if (!front) { shade(big, 14, lum); digits(c, time, cx - tw / 2, cy + cap / 2, big, cl, track); return; }
+        fx.setStyle(Paint.Style.STROKE);
+        fx.setStrokeWidth(Ui.px(4));
+        fx.setColor(0x33FFFFFF);
+        fx.setShadowLayer(Ui.px(6), 0, Ui.px(1), 0x66000000);
+        c.drawCircle(cx, cy, r, fx);
+        long ms = System.currentTimeMillis() % 60000;
+        fx.setColor(0xF2FFFFFF);
+        c.drawArc(cx - r, cy - r, cx + r, cy + r, -90, ms / 60000f * 360f, false, fx);
+        fx.clearShadowLayer();
+        fx.setStyle(Paint.Style.FILL);
+        if (showAmpm) {
+            side.setTextSize(Ui.px(18));
+            side.setTextAlign(Paint.Align.CENTER);
+            side.setColor(0xCCFFFFFF);
+            shade(side, 6, lum);
+            c.drawText(ampm(k), cx, cy + cap / 2 + Ui.px(34), side);
+            side.setTextAlign(Paint.Align.LEFT);
+        }
+        infoLine(c, DateFormat.format("EEEE, d MMMM", k).toString(), cx, cy + r + Ui.px(46), 18, lum, true);
+        if (showRange && !rangeText().isEmpty()) {
+            small.setTextSize(Ui.px(14));
+            small.setTextAlign(Paint.Align.CENTER);
+            small.setColor(0xB3FFFFFF);
+            c.drawText(rangeText(), cx, cy + r + Ui.px(72), small);
+            small.setTextAlign(Paint.Align.LEFT);
+        }
+    }
+
+    /** Split: hours on the far left, minutes on the far right, the details centred low between them. */
+    void split(Canvas c, Calendar k, int w, int h, boolean front, float lum, int sx, int sy) {
+        String hh = DateFormat.format("hh", k).toString(), mm = DateFormat.format("mm", k).toString();
+        big.setTypeface(bold);
+        big.setTextSize(h * 0.62f);
+        big.setTextScaleX(0.52f);
+        float cl = cell(big), track = cl * 0.02f, cap = big.getTextSize() * 0.70f;
+        float mw = width(mm, big, cl, track), edge = w * 0.05f;
+        float baseline = h * 0.12f + cap + sy;
+        if (!front) {
+            shade(big, 16, lum);
+            big.setColor(0xF5FFFFFF);
+            digits(c, hh, edge + sx, baseline, big, cl, track);
+            big.setColor(0xCCFFFFFF);
+            digits(c, mm, w - edge - mw + sx, baseline, big, cl, track);
+            return;
+        }
+        float mid = w / 2f + sx, y = baseline + Ui.px(44);
+        infoLine(c, DateFormat.format("EEEE, d MMMM", k).toString(), mid, y, 19, lum, true);
+        if (showAmpm || showSecs) {
+            side.setTextSize(Ui.px(20));
+            side.setTextAlign(Paint.Align.CENTER);
+            side.setColor(0xCCFFFFFF);
+            shade(side, 6, lum);
+            String t = (showAmpm ? ampm(k) : "") + (showAmpm && showSecs ? "   " : "") + (showSecs ? ":" + secs(k) : "");
+            c.drawText(t, mid, baseline - cap / 2, side);
+            side.setTextAlign(Paint.Align.LEFT);
+        }
+    }
+
+    /** Mono: a typewriter clock with a blinking colon, top left, details in the same type. */
+    void mono(Canvas c, Calendar k, int w, int h, boolean front, float lum, int sx, int sy) {
+        big.setTypeface(Ui.mono);
+        big.setTextSize(h * 0.20f);
+        String hh = DateFormat.format("hh", k).toString(), mm = DateFormat.format("mm", k).toString();
+        float cl = cell(big), cap = big.getTextSize() * 0.70f, x0 = w * 0.07f + sx, baseline = h * 0.12f + cap + sy;
+        float colon = big.measureText(":");
+        if (!front) {
+            shade(big, 12, lum);
+            big.setColor(0xF5FFFFFF);
+            float x = digits(c, hh, x0, baseline, big, cl, 0);
+            big.setAlpha(k.get(Calendar.SECOND) % 2 == 0 ? 245 : 70);   // the colon blinks with the seconds
+            c.drawText(":", x, baseline, big);
+            big.setAlpha(245);
+            digits(c, mm, x + colon, baseline, big, cl, 0);
+            return;
+        }
+        float end = x0 + cl * 4 + colon;
+        sideStack(c, k, end + Ui.px(14), baseline - cap, baseline, Ui.px(22), lum);
+        Typeface was = small.getTypeface();
+        small.setTypeface(Ui.mono);
+        infoLine(c, DateFormat.format("EEE dd.MM.yyyy", k).toString().toLowerCase(Locale.US), x0 + Ui.px(4), baseline + Ui.px(42), 17, lum, false);
+        if (showRange && !rangeText().isEmpty()) {
+            small.setTextSize(Ui.px(14));
+            small.setColor(0xB3FFFFFF);
+            c.drawText(rangeText().toLowerCase(Locale.US), x0 + Ui.px(4), baseline + Ui.px(68), small);
+        }
+        small.setTypeface(was);
+    }
+
+    /** Serif: an elegant italic serif time, centred, a spaced out date above it. */
+    void serif(Canvas c, Calendar k, int w, int h, boolean front, float lum, int sx, int sy) {
+        String time = DateFormat.format("h:mm", k).toString();
+        big.setTypeface(Ui.serifItalic);
+        big.setTextSize(h * 0.36f);
+        float cl = cell(big), track = -big.getTextSize() * 0.01f, cap = big.getTextSize() * 0.68f;
+        float tw = width(time, big, cl, track), cx = w / 2f + sx, top = h * 0.16f + sy, baseline = top + Ui.px(30) + cap;
+        side.setTextSize(Ui.px(22));
+        float sw = (showAmpm || showSecs) ? Math.max(side.measureText("PM"), cell(side) * 2) + Ui.px(14) : 0;
+        float x0 = cx - (tw + sw) / 2;
+        if (!front) { shade(big, 14, lum); big.setColor(0xF5FFFFFF); digits(c, time, x0, baseline, big, cl, track); return; }
+        if (showDate) {
+            small.setTextSize(Ui.px(15));
+            small.setLetterSpacing(0.28f);
+            small.setTextAlign(Paint.Align.CENTER);
+            small.setColor(0xE6FFFFFF);
+            shade(small, 6, lum);
+            c.drawText(DateFormat.format("EEEE · d MMMM", k).toString().toUpperCase(Locale.US), cx, top, small);
+            small.setLetterSpacing(0f);
+            small.setTextAlign(Paint.Align.LEFT);
+        }
+        if (sw > 0) sideStack(c, k, x0 + tw + Ui.px(14), baseline - cap, baseline, Ui.px(22), lum);
+        if (showWeather) {
+            boolean d = showDate;
+            showDate = false;
+            infoLine(c, "", cx, baseline + Ui.px(46), 18, lum, true);
+            showDate = d;
+        }
+        if (showRange && !rangeText().isEmpty()) {
+            small.setTextSize(Ui.px(14));
+            small.setTextAlign(Paint.Align.CENTER);
+            small.setColor(0xB3FFFFFF);
+            c.drawText(rangeText(), cx, baseline + Ui.px(74), small);
+            small.setTextAlign(Paint.Align.LEFT);
+        }
+    }
+
+    /** Block: heavy, tightly packed digits low on the screen, details small in the top left. */
+    void block(Canvas c, Calendar k, int w, int h, boolean front, float lum, int sx, int sy) {
+        String time = DateFormat.format("h:mm", k).toString();
+        big.setTypeface(heavy);
+        big.setTextSize(h * 0.50f);
+        big.setTextScaleX(0.92f);
+        float cl = cell(big), track = -cl * 0.06f, cap = big.getTextSize() * 0.70f;
+        float x0 = w * 0.05f + sx, baseline = h * 0.93f + sy;
+        if (!front) { shade(big, 18, lum); big.setColor(0xF5FFFFFF); digits(c, time, x0, baseline, big, cl, track); return; }
+        float tw = width(time, big, cl, track);
+        sideStack(c, k, x0 + tw + Ui.px(16), baseline - cap, baseline, Ui.px(26), lum);
+        infoLine(c, DateFormat.format("EEEE, d MMMM", k).toString(), x0 + Ui.px(6), baseline - cap - Ui.px(24), 19, lum, false);
+    }
+
+    /** Corner: a compact clock top right, everything aligned to the right edge. */
+    void corner(Canvas c, Calendar k, int w, int h, boolean front, float lum, int sx, int sy) {
+        String time = DateFormat.format("h:mm", k).toString();
+        big.setTypeface(bold);
+        big.setTextSize(h * 0.19f);
+        float cl = cell(big), track = -big.getTextSize() * 0.02f, cap = big.getTextSize() * 0.70f;
+        float right = w * 0.94f + sx, tw = width(time, big, cl, track);
+        side.setTextSize(Ui.px(18));
+        float sw = (showAmpm || showSecs) ? Math.max(side.measureText("PM"), cell(side) * 2) + Ui.px(10) : 0;
+        float x0 = right - tw - sw, baseline = h * 0.10f + cap + sy;
+        if (!front) { shade(big, 12, lum); big.setColor(0xF5FFFFFF); digits(c, time, x0, baseline, big, cl, track); return; }
+        if (sw > 0) sideStack(c, k, x0 + tw + Ui.px(10), baseline - cap, baseline, Ui.px(18), lum);
+        // details right aligned: measure, then draw from the left of their width
+        String date = DateFormat.format("EEEE, d MMMM", k).toString();
+        float y = baseline + Ui.px(36);
+        small.setTextSize(Ui.px(17));
+        if (showDate) {
+            small.setTextAlign(Paint.Align.RIGHT);
+            small.setColor(0xF2FFFFFF);
+            shade(small, 6, lum);
+            c.drawText(date, right, y, small);
+            small.setTextAlign(Paint.Align.LEFT);
+            y += Ui.px(28);
+        }
+        if (showWeather && !weatherText().isEmpty()) {
+            float icon = Ui.px(17 * 1.4f), igap = Ui.px(17 * 0.55f);
+            small.setTextSize(Ui.px(17));
+            float ww = icon + igap + small.measureText(weatherText());
+            boolean d = showDate;
+            showDate = false;
+            infoLine(c, "", right - ww, y, 17, lum, false);
+            showDate = d;
+            y += Ui.px(24);
+        }
+        if (showRange && !rangeText().isEmpty()) {
+            small.setTextSize(Ui.px(13));
+            small.setTextAlign(Paint.Align.RIGHT);
+            small.setColor(0xB3FFFFFF);
+            c.drawText(rangeText(), right, y, small);
+            small.setTextAlign(Paint.Align.LEFT);
         }
     }
 

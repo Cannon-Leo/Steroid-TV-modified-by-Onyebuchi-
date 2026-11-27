@@ -28,6 +28,8 @@ import java.util.Set;
 class HistoryRow extends Shelf {
     static final long DAYS = 3L * 86400000L;
 
+    volatile java.util.Map<String, Apps.App> apps = new java.util.HashMap<>();   // filled once per refresh, off the main thread
+
     HistoryRow(Activity a, float size) {
         super(a, "*", "", size);
         head.setText("Recently played on this TV");
@@ -35,6 +37,10 @@ class HistoryRow extends Shelf {
 
     @Override List<Prog> query() {
         List<Prog> out = new ArrayList<>();
+        List<Apps.App> installed = Apps.all(act);   // one look at the installed apps per refresh
+        java.util.Map<String, Apps.App> byPkg = new java.util.HashMap<>();
+        for (Apps.App a : installed) byPkg.put(a.pkg, a);
+        apps = byPkg;
         Set<String> withMedia = new HashSet<>();
         try {
             org.json.JSONArray hist = History.load(act);
@@ -58,7 +64,7 @@ class HistoryRow extends Shelf {
                 java.util.Map<String, Long> last = new java.util.HashMap<>();
                 for (UsageStats s : stats) if (s.getLastTimeUsed() > now - DAYS)
                     last.merge(s.getPackageName(), s.getLastTimeUsed(), Math::max);
-                for (Apps.App a : Apps.all(act)) {
+                for (Apps.App a : installed) {
                     Long t = last.get(a.pkg);
                     if (t == null || withMedia.contains(a.pkg) || a.pkg.equals(act.getPackageName())) continue;
                     if (History.hidden(act, a.pkg, t)) continue;   // removed or cleared since
@@ -91,7 +97,7 @@ class HistoryRow extends Shelf {
         View card = super.card(p);
         FrameLayout in = (FrameLayout) ((FrameLayout) card).getChildAt(0);
         // which app it came from: a small icon top left; app only cards get the app's own artwork
-        Apps.App a = Apps.find(Apps.all(act), p.pkg);
+        Apps.App a = apps.get(p.pkg);   // no package scan per card
         if (a != null) {
             Runnable apply = () -> {
                 Object[] o = Apps.art.get(a.pkg);

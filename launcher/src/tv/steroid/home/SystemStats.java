@@ -2,7 +2,6 @@ package tv.steroid.home;
 
 import android.app.ActivityManager;
 import android.content.Context;
-import android.graphics.drawable.GradientDrawable;
 import android.net.TrafficStats;
 import android.os.Environment;
 import android.os.Handler;

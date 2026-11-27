@@ -1,14 +1,9 @@
 package tv.steroid.home;
 
 import android.graphics.Canvas;
-import android.graphics.Paint;
-import android.graphics.Typeface;
-import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.SystemClock;
 import android.service.dreams.DreamService;
-import android.text.format.DateFormat;
 import java.util.Calendar;
 
 /**
